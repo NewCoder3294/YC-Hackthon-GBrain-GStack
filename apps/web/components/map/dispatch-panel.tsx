@@ -9,14 +9,6 @@ interface Props {
   onClose: () => void;
 }
 
-function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return iso;
-  }
-}
-
 function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const m = Math.round(diffMs / 60_000);
@@ -193,23 +185,6 @@ export function DispatchPanel({ call, onClose }: Props) {
                 <span className="ml-1 text-neutral-500">· TG {call.talkgroupId}</span>
               )}
             </dd>
-            <dt className="text-neutral-500">Received</dt>
-            <dd className="text-black">
-              {formatTime(call.receivedAt)} · simulated
-            </dd>
-            {call.recordedAt && (
-              <>
-                <dt className="text-neutral-500">Recorded</dt>
-                <dd className="text-black" title={call.recordedAt}>
-                  {new Date(call.recordedAt).toLocaleString([], {
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </dd>
-              </>
-            )}
             <dt className="text-neutral-500">Source</dt>
             <dd className="text-black truncate" title={call.fileName}>
               {call.fileName}
