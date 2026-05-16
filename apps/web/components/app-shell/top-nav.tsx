@@ -26,9 +26,6 @@ export function TopNav() {
           <NavLink href={"/incidents" as Route} label="Incidents" />
         </nav>
       </div>
-      <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-300">
-        Open demo · no sign-in
-      </span>
     </header>
   );
 }
