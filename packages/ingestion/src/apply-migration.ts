@@ -13,7 +13,7 @@
  * from apps/web/.env.local via load-env).
  */
 
-import "../load-env";
+import "./load-env";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
