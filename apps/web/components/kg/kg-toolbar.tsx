@@ -20,6 +20,7 @@ const KIND_SWATCH: Record<KgNodeKind, string> = {
   member: "border-black bg-white",
   territory: "border border-dashed border-black bg-white",
   arrest: "border-neutral-500 bg-neutral-50",
+  event: "border-neutral-700 bg-white",
   alert: "border-2 border-black bg-black",
   incident: "border-black bg-white",
   pattern: "border-black bg-white rounded-full",

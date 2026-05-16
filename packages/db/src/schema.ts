@@ -39,6 +39,7 @@ export const incidents = pgTable("incidents", {
     .notNull()
     .defaultNow(),
   createdBy: uuid("created_by").notNull(),
+  suspectGangId: uuid("suspect_gang_id"),
 });
 
 export const clips = pgTable("clips", {

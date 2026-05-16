@@ -55,6 +55,47 @@ interface AlertRow {
   acknowledged_at: string | null;
 }
 
+interface DecisionRow {
+  id: string;
+  incident_id: string;
+  outcome: "act" | "hold" | "dismiss";
+  reason: string | null;
+  reviewer: string;
+  decided_at: string;
+}
+
+interface GbrainRecordRow {
+  id: string;
+  kind: "pattern" | "baseline" | "reviewed_incident" | "intel_note";
+  title: string;
+  body: string;
+  tags: string[];
+  related_incident_id: string | null;
+  related_gang_id: string | null;
+  confidence: number | string | null;
+  samples: number | null;
+  source: string;
+  created_at: string;
+}
+
+interface GangEventRow {
+  id: string;
+  gang_id: string | null;
+  kind:
+    | "sighting"
+    | "shooting"
+    | "meeting"
+    | "recruitment"
+    | "arrest"
+    | "dispute";
+  description: string | null;
+  occurred_at: string;
+  lat: number | null;
+  lng: number | null;
+  source: string | null;
+  related_incident_id: string | null;
+}
+
 interface IncidentRow {
   id: string;
   title: string;
@@ -101,6 +142,9 @@ export async function loadKgFromSupabase(): Promise<{
     arrestsRes,
     alertsRes,
     incidentsRes,
+    decisionsRes,
+    gbrainRes,
+    eventsRes,
     dispatchCalls,
   ] = await Promise.all([
     supabase.from("gangs").select("id, name, aliases, color, active, notes"),
@@ -130,6 +174,24 @@ export async function loadKgFromSupabase(): Promise<{
       )
       .order("created_at", { ascending: false })
       .limit(40),
+    supabase
+      .from("decisions")
+      .select("id, incident_id, outcome, reason, reviewer, decided_at")
+      .order("decided_at", { ascending: false }),
+    supabase
+      .from("gbrain_records")
+      .select(
+        "id, kind, title, body, tags, related_incident_id, related_gang_id, confidence, samples, source, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(80),
+    supabase
+      .from("gang_events")
+      .select(
+        "id, gang_id, kind, description, occurred_at, lat, lng, source, related_incident_id",
+      )
+      .order("occurred_at", { ascending: false })
+      .limit(40),
     // Live SF Open Data dispatch (audio readout source). Limited so the
     // graph stays legible — KG shows the freshest activity at a glance.
     fetchRecentDispatch({ limit: 30, revalidate: 60 }),
@@ -141,6 +203,9 @@ export async function loadKgFromSupabase(): Promise<{
   const arrests = (arrestsRes.data ?? []) as ArrestRow[];
   const alerts = (alertsRes.data ?? []) as AlertRow[];
   const incidents = (incidentsRes.data ?? []) as unknown as IncidentRow[];
+  const decisions = (decisionsRes.data ?? []) as DecisionRow[];
+  const gbrainRecords = (gbrainRes.data ?? []) as GbrainRecordRow[];
+  const events = (eventsRes.data ?? []) as GangEventRow[];
 
   const nodes: KgNode[] = [];
   const edges: KgEdge[] = [];
@@ -264,6 +329,103 @@ export async function loadKgFromSupabase(): Promise<{
         source: `gang:${i.suspect_gang_id}`,
         target: `inc:${i.id}`,
         label: "suspect",
+      });
+    }
+  }
+
+  for (const d of decisions) {
+    nodes.push({
+      id: `decision:${d.id}`,
+      kind: "decision",
+      label: d.outcome.toUpperCase(),
+      sub: `${d.reviewer} · ${isoToHuman(d.decided_at)}${d.reason ? ` · ${d.reason}` : ""}`,
+      meta: {
+        outcome: d.outcome,
+        reviewer: d.reviewer,
+      },
+      source: "live",
+    });
+    edges.push({
+      id: `e:inc-decision:${d.id}`,
+      source: `inc:${d.incident_id}`,
+      target: `decision:${d.id}`,
+      label: "decided",
+    });
+  }
+
+  for (const r of gbrainRecords) {
+    if (r.kind === "pattern" || r.kind === "baseline") {
+      const meta: Record<string, string | number> = { source: r.source };
+      if (r.confidence != null) meta.confidence = Number(r.confidence).toFixed(2);
+      if (r.samples != null) meta.samples = r.samples;
+      const node: KgNode = {
+        id: `gbrain:${r.id}`,
+        kind: r.kind,
+        label: r.title,
+        meta,
+        source: "live",
+      };
+      if (r.tags.length) node.sub = r.tags.join(" · ");
+      nodes.push(node);
+      if (r.related_incident_id) {
+        edges.push({
+          id: `e:inc-gbrain:${r.id}`,
+          source: `inc:${r.related_incident_id}`,
+          target: `gbrain:${r.id}`,
+          label: "informs",
+        });
+      }
+      if (r.related_gang_id) {
+        edges.push({
+          id: `e:gang-gbrain:${r.id}`,
+          source: `gang:${r.related_gang_id}`,
+          target: `gbrain:${r.id}`,
+          label: "context",
+        });
+      }
+    }
+    // reviewed_incident kind doesn't appear as its own node — it lives behind
+    // the decision node and is queryable via the incident's record list.
+  }
+
+  for (const ev of events) {
+    const labelByKind: Record<GangEventRow["kind"], string> = {
+      sighting: "Sighting",
+      shooting: "Shooting",
+      meeting: "Meeting",
+      recruitment: "Recruitment",
+      arrest: "Arrest",
+      dispute: "Dispute",
+    };
+    const eventNode: KgNode = {
+      id: `event:${ev.id}`,
+      kind: "event",
+      label: `${labelByKind[ev.kind]} · ${ev.description ?? "—"}`,
+      meta: {
+        kind: ev.kind,
+        when: isoToHuman(ev.occurred_at),
+        source: ev.source ?? "—",
+      },
+      source: "live",
+    };
+    if (ev.source) eventNode.sub = `${isoToHuman(ev.occurred_at)} · ${ev.source}`;
+    else eventNode.sub = isoToHuman(ev.occurred_at);
+    nodes.push(eventNode);
+
+    if (ev.gang_id) {
+      edges.push({
+        id: `e:gang-event:${ev.id}`,
+        source: `gang:${ev.gang_id}`,
+        target: `event:${ev.id}`,
+        label: ev.kind,
+      });
+    }
+    if (ev.related_incident_id) {
+      edges.push({
+        id: `e:event-inc:${ev.id}`,
+        source: `event:${ev.id}`,
+        target: `inc:${ev.related_incident_id}`,
+        label: "precedes",
       });
     }
   }

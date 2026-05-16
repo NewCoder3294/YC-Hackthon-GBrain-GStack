@@ -3,6 +3,7 @@ export type KgNodeKind =
   | "member"
   | "territory"
   | "arrest"
+  | "event"
   | "alert"
   | "incident"
   | "pattern"
@@ -32,6 +33,7 @@ export const KIND_LABEL: Record<KgNodeKind, string> = {
   member: "Member",
   territory: "Territory",
   arrest: "Arrest",
+  event: "Event",
   alert: "Alert",
   incident: "Incident",
   pattern: "Pattern",
@@ -41,12 +43,13 @@ export const KIND_LABEL: Record<KgNodeKind, string> = {
   dispatch: "Dispatch",
 };
 
-// Display order in toolbar (groups: people → places → events → analysis)
+// Display order in toolbar (groups: people → places → history → live → analysis)
 export const KIND_ORDER: KgNodeKind[] = [
   "gang",
   "member",
   "territory",
   "arrest",
+  "event",
   "location",
   "dispatch",
   "incident",
@@ -62,6 +65,7 @@ export const KIND_COLUMN: Record<KgNodeKind, number> = {
   member: 1,
   territory: 1,
   arrest: 2,
+  event: 2,
   location: 2,
   dispatch: 3,
   incident: 3,

@@ -19,7 +19,6 @@ import { KgFlowNode, type KgNodeData } from "./kg-node";
 import { KgToolbar } from "./kg-toolbar";
 import { KgInspector, type Neighbor } from "./kg-inspector";
 import {
-  KIND_COLUMN,
   KIND_ORDER,
   type KgEdge,
   type KgNode,
@@ -33,22 +32,118 @@ interface Props {
 
 const nodeTypes = { kg: KgFlowNode };
 
+// Force-directed layout (Fruchterman-Reingold-ish).
+// Deterministic seed so reloads don't shuffle the graph.
 function layoutPositions(
   nodes: KgNode[],
+  edges: KgEdge[],
 ): Map<string, { x: number; y: number }> {
-  const bucket = new Map<KgNodeKind, KgNode[]>();
-  for (const n of nodes) {
-    const arr = bucket.get(n.kind) ?? [];
-    arr.push(n);
-    bucket.set(n.kind, arr);
-  }
   const positions = new Map<string, { x: number; y: number }>();
-  for (const [kind, arr] of bucket.entries()) {
-    const x = KIND_COLUMN[kind] * 280;
-    arr.forEach((n, i) => {
-      positions.set(n.id, { x, y: i * 110 });
+  if (nodes.length === 0) return positions;
+
+  // Deterministic pseudo-random for stable layouts across reloads.
+  let seed = 1234;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+
+  // Initial placement on a circle by kind cluster — gives the simulation
+  // a sane starting point so it converges in fewer iterations.
+  const kindOffsets: Record<KgNodeKind, number> = {
+    gang: 0,
+    member: 60,
+    territory: 110,
+    arrest: 150,
+    event: 200,
+    location: 250,
+    incident: 300,
+    alert: 330,
+    decision: 30,
+    dispatch: 230,
+    pattern: 280,
+    baseline: 80,
+  };
+  nodes.forEach((n) => {
+    const baseAngle = ((kindOffsets[n.kind] ?? 0) / 360) * Math.PI * 2;
+    const jitter = (rand() - 0.5) * 0.8;
+    const r = 480 + rand() * 120;
+    positions.set(n.id, {
+      x: Math.cos(baseAngle + jitter) * r,
+      y: Math.sin(baseAngle + jitter) * r,
     });
+  });
+
+  const idealLength = 320;
+  const repelStrength = idealLength * idealLength * 4.5;
+  let temperature = idealLength * 5;
+  const cooling = 0.972;
+  const iterations = 450;
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const forces = new Map<string, { fx: number; fy: number }>();
+    for (const n of nodes) forces.set(n.id, { fx: 0, fy: 0 });
+
+    // Pairwise repulsion
+    for (let i = 0; i < nodes.length; i++) {
+      const a = nodes[i]!;
+      const pa = positions.get(a.id)!;
+      for (let j = i + 1; j < nodes.length; j++) {
+        const b = nodes[j]!;
+        const pb = positions.get(b.id)!;
+        const dx = pa.x - pb.x;
+        const dy = pa.y - pb.y;
+        const distSq = dx * dx + dy * dy + 0.01;
+        const dist = Math.sqrt(distSq);
+        const f = repelStrength / distSq;
+        const fx = (dx / dist) * f;
+        const fy = (dy / dist) * f;
+        forces.get(a.id)!.fx += fx;
+        forces.get(a.id)!.fy += fy;
+        forces.get(b.id)!.fx -= fx;
+        forces.get(b.id)!.fy -= fy;
+      }
+    }
+
+    // Spring attraction along edges
+    for (const e of edges) {
+      const pa = positions.get(e.source);
+      const pb = positions.get(e.target);
+      if (!pa || !pb) continue;
+      const dx = pa.x - pb.x;
+      const dy = pa.y - pb.y;
+      const dist = Math.sqrt(dx * dx + dy * dy) + 0.01;
+      const f = (dist * dist) / idealLength;
+      const fx = (dx / dist) * f;
+      const fy = (dy / dist) * f;
+      forces.get(e.source)!.fx -= fx;
+      forces.get(e.source)!.fy -= fy;
+      forces.get(e.target)!.fx += fx;
+      forces.get(e.target)!.fy += fy;
+    }
+
+    // Mild centering gravity (keeps disconnected clusters from flying off)
+    for (const n of nodes) {
+      const p = positions.get(n.id)!;
+      const dist = Math.sqrt(p.x * p.x + p.y * p.y) + 0.01;
+      const gravity = dist * 0.012;
+      forces.get(n.id)!.fx -= (p.x / dist) * gravity;
+      forces.get(n.id)!.fy -= (p.y / dist) * gravity;
+    }
+
+    // Apply with temperature cap
+    for (const n of nodes) {
+      const p = positions.get(n.id)!;
+      const f = forces.get(n.id)!;
+      const mag = Math.sqrt(f.fx * f.fx + f.fy * f.fy) + 0.001;
+      const step = Math.min(mag, temperature);
+      p.x += (f.fx / mag) * step;
+      p.y += (f.fy / mag) * step;
+    }
+
+    temperature *= cooling;
   }
+
   return positions;
 }
 
@@ -113,6 +208,7 @@ function GraphInner({ nodes, edges }: Props) {
       member: 0,
       territory: 0,
       arrest: 0,
+      event: 0,
       alert: 0,
       incident: 0,
       pattern: 0,
@@ -160,7 +256,7 @@ function GraphInner({ nodes, edges }: Props) {
   }, [focusedId, edges]);
 
   const initial = useMemo(() => {
-    const positions = layoutPositions(nodes);
+    const positions = layoutPositions(nodes, edges);
     const rfNodes: Node[] = nodes.map((n) => {
       const data: KgNodeData = { node: n, state: "default" };
       return {
@@ -175,10 +271,15 @@ function GraphInner({ nodes, edges }: Props) {
       source: e.source,
       target: e.target,
       label: e.label,
-      labelStyle: { fontFamily: "var(--font-mono)", fontSize: 9, fill: "#737373" },
+      labelStyle: {
+        fontFamily: "var(--font-mono)",
+        fontSize: 9,
+        fill: "#737373",
+      },
       labelBgStyle: { fill: "#ffffff" },
-      style: { stroke: "#404040", strokeWidth: 1 },
-      type: "smoothstep",
+      labelBgPadding: [3, 1] as [number, number],
+      style: { stroke: "#737373", strokeWidth: 1 },
+      type: "default",
     }));
     return { rfNodes, rfEdges };
   }, [nodes, edges]);
@@ -360,13 +461,13 @@ function GraphInner({ nodes, edges }: Props) {
         onNodeDoubleClick={(_, n) => focusOnNode(n.id)}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.08, maxZoom: 1.2 }}
         proOptions={{ hideAttribution: true }}
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable
-        minZoom={0.2}
-        maxZoom={2}
+        minZoom={0.1}
+        maxZoom={2.5}
       >
         <Background color="#737373" gap={20} size={1.5} />
         <Controls

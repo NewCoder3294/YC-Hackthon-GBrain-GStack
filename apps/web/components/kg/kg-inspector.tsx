@@ -2,6 +2,9 @@
 
 import { cn } from "@/lib/utils";
 import { KIND_LABEL, type KgNode } from "./types";
+import { DecisionPanel } from "./decision-panel";
+import { AckButton } from "./ack-button";
+import { IntelNotePanel } from "./intel-note-panel";
 
 interface Neighbor {
   node: KgNode;
@@ -73,7 +76,7 @@ export function KgInspector({
         </div>
 
         {node.kind === "incident" && (
-          <div className="border-t border-neutral-200 px-3 py-3">
+          <div className="space-y-3 border-t border-neutral-200 px-3 py-3">
             <button
               type="button"
               onClick={onTrace}
@@ -86,11 +89,36 @@ export function KgInspector({
             >
               {tracing ? "Tracing prior context…" : "Trace prior context"}
             </button>
-            <p className="mt-2 font-mono text-[10px] leading-relaxed text-neutral-500">
-              Simulates the GBrain query expansion that the dispatcher view
-              fires when this incident lands. Highlights the patterns and
-              baselines that would surface as "Prior Context."
+            <p className="font-mono text-[10px] leading-relaxed text-neutral-500">
+              Highlights the patterns + baselines GBrain surfaces when this
+              incident lands.
             </p>
+            <div className="border-t border-neutral-200 pt-3">
+              <h3 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                Dispatcher decision
+              </h3>
+              <DecisionPanel incidentId={node.id.replace(/^inc:/, "")} />
+            </div>
+            <div className="border-t border-neutral-200 pt-3">
+              <IntelNotePanel
+                relatedIncidentId={node.id.replace(/^inc:/, "")}
+              />
+            </div>
+          </div>
+        )}
+
+        {node.kind === "gang" && (
+          <div className="border-t border-neutral-200 px-3 py-3">
+            <IntelNotePanel relatedGangId={node.id.replace(/^gang:/, "")} />
+          </div>
+        )}
+
+        {node.kind === "alert" && (
+          <div className="border-t border-neutral-200 px-3 py-3">
+            <AckButton
+              alertId={node.id.replace(/^alert:/, "")}
+              alreadyAcked={node.meta?.ack === "acknowledged"}
+            />
           </div>
         )}
 
