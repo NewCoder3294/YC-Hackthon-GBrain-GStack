@@ -4,9 +4,17 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { cn } from "@/lib/utils";
+import { LiveStream } from "@/components/cameras/live-stream";
 
 export type DecisionHint = "act" | "hold" | "review" | "dismiss";
 export type Severity = "low" | "med" | "high";
+
+export interface CameraInfo {
+  streamUrl: string;
+  streamType: "hls" | "mjpeg";
+  /** Short location label like "I-280 N" */
+  label: string;
+}
 
 export interface ActivityCard {
   key: string;
@@ -20,6 +28,8 @@ export interface ActivityCard {
   tags: string[];
   mix: string | null;
   pageSlug: string | null;
+  /** Linked camera for the row's live thumbnail. */
+  camera: CameraInfo | null;
 }
 
 type SeverityFilter = "all" | Severity;
@@ -265,7 +275,34 @@ function Card({ card }: { card: ActivityCard }) {
       </div>
 
       <div className="flex shrink-0 flex-col items-end gap-1 font-mono text-[10px] uppercase tracking-widest text-neutral-400">
-        <span>{formatRelative(card.ts)}</span>
+        <span className="tabular-nums">{formatRelative(card.ts)}</span>
+        {card.camera ? (
+          card.incidentId ? (
+            <Link
+              href={`/incidents/${card.incidentId}` as Route}
+              className="block"
+              title={`Open incident · ${card.camera.label}`}
+            >
+              <LiveStream
+                streamUrl={card.camera.streamUrl}
+                streamType={card.camera.streamType}
+                showLiveDot
+                className="h-[54px] w-[96px] rounded-sm border border-neutral-200 hover:border-black"
+              />
+            </Link>
+          ) : (
+            <LiveStream
+              streamUrl={card.camera.streamUrl}
+              streamType={card.camera.streamType}
+              showLiveDot
+              className="h-[54px] w-[96px] rounded-sm border border-neutral-200"
+            />
+          )
+        ) : (
+          <div className="flex h-[54px] w-[96px] items-center justify-center rounded-sm border border-dashed border-neutral-200 text-[9px] text-neutral-300">
+            no feed
+          </div>
+        )}
         {card.incidentId && (
           <Link
             href={`/incidents/${card.incidentId}` as Route}
