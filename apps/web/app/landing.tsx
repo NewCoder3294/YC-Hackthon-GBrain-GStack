@@ -1138,8 +1138,8 @@ function Footer() {
   return (
     <footer className="px-6 py-6">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-        <span>WatchDog · GStack × GBrain hackathon · 2026</span>
-        <span>SFPD demo build · No real footage stored</span>
+        <span>WatchDog · GStack × GBrain · 2026</span>
+        <span>SFPD pilot build · No real footage stored</span>
       </div>
     </footer>
   );

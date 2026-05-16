@@ -1,9 +1,9 @@
 /**
  * Scripted 911 call scenarios for the WatchDog demo (TRD §8).
  *
- * These are NOT live 911 feeds — there is no public 911 audio API. For the
- * hackathon demo we replay a deterministic, hand-authored timeline of San
- * Francisco calls so the operator can show the correlator lighting up on
+ * These are NOT live 911 feeds — there is no public 911 audio API. The
+ * surface replays a deterministic, hand-authored timeline of San
+ * Francisco calls so the operator can see the correlator light up on
  * cue. The canonical seed narrative is Hunters Point / Bayview gang
  * activity (Gang A vs Gang B) with a parallel Mission District thread.
  *

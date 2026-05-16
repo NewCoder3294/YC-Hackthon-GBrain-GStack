@@ -11,7 +11,7 @@ import { EventFeed } from "./event-feed";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
 import { isHighPriority, type DispatchCall } from "@/lib/dispatch";
-import { useDispatchSimulation } from "@/hooks/use-dispatch-simulation";
+import { useDispatchFeed } from "@/hooks/use-dispatch-feed";
 import { cn } from "@/lib/utils";
 
 type CamWithCoords = CameraTileData & { lat: number; lng: number };
@@ -109,7 +109,7 @@ export function SFMap({ cameras }: Props) {
   const [selectedIncident, setSelectedIncident] = useState<WdIncident | null>(null);
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchCall | null>(null);
 
-  const dispatch = useDispatchSimulation();
+  const dispatch = useDispatchFeed();
   const eventStream = useEventStream(dispatch.calls);
 
   const locateOnMap = useCallback((lat: number, lng: number) => {
@@ -467,7 +467,7 @@ export function SFMap({ cameras }: Props) {
         <button
           type="button"
           onClick={() => dispatch.setPaused(!dispatch.paused)}
-          title={dispatch.paused ? "Resume simulation" : "Pause simulation"}
+          title={dispatch.paused ? "Resume feed" : "Pause feed"}
           className={cn(
             "h-7 border px-2 font-mono text-[10px] uppercase tracking-widest",
             dispatch.paused
@@ -475,7 +475,7 @@ export function SFMap({ cameras }: Props) {
               : "border-black bg-black text-white",
           )}
         >
-          {dispatch.paused ? "Sim paused" : "Sim live"}
+          {dispatch.paused ? "Feed paused" : "Feed live"}
         </button>
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           {filteredCams.length} cams · {wdIncidents.length} incidents ·{" "}

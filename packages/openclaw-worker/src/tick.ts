@@ -160,7 +160,7 @@ async function emitScenario(scenario: Scenario, result: TickResult): Promise<voi
   result.intel_pages_written++;
 
   // Pattern page if signal mix is recurring (cam + 911 within 30s is the
-  // canonical hackathon pattern). Upsert by mix-signature so repeated detections
+  // canonical seed pattern). Upsert by mix-signature so repeated detections
   // accumulate in one row rather than spamming the KG.
   const hasCam = scenario.signals.some((s) => s.kind.startsWith("camera"));
   const has911 = scenario.signals.some((s) => s.kind === "call_911");
@@ -290,7 +290,7 @@ async function emitFusionIncident(
 }
 
 function extractRegion(scenario: Scenario): string {
-  // Cheap region inference from coordinates. Good enough for hackathon tags.
+  // Cheap region inference from coordinates.
   const { lat, lng } = scenario;
   if (lat > 37.78 && lng < -122.4 && lng > -122.42) return "tenderloin";
   if (lat > 37.76 && lat < 37.78 && lng < -122.41 && lng > -122.43) return "mission";

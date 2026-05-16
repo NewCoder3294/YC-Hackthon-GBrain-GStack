@@ -1,7 +1,7 @@
 -- signal_events: shared Layer-1 ingestion substrate (TRD §3.1).
 -- Applied like 0001_rls.sql (run directly via Supabase SQL editor / psql;
 -- not in the drizzle journal, matching this repo's existing convention).
--- Idempotent so it is safe to re-run during the hackathon.
+-- Idempotent so it is safe to re-run.
 
 CREATE TABLE IF NOT EXISTS "signal_events" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

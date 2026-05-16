@@ -67,7 +67,7 @@ export function haversineMeters(
 /**
  * Pure clustering. Greedy single-pass: each event either joins an existing
  * cluster whose centroid is within `radiusM` AND latest event within `windowS`,
- * or starts a new one. Good enough for hackathon scale; would want HDBSCAN
+ * or starts a new one. Good enough at current scale; would want HDBSCAN
  * or DBSCAN at production volume.
  */
 export function clusterSignals(

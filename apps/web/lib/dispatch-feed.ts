@@ -9,9 +9,8 @@ import {
 
 // --- Random helpers --------------------------------------------------------
 
-// Mulberry32 PRNG — small, fast, deterministic given a seed. Used so the
-// simulator stays deterministic when we want it (tests) but defaults to
-// fresh randomness per session.
+// Mulberry32 PRNG — small, fast, deterministic when seeded. Tests pin a
+// seed for reproducibility; runtime uses a per-session entropy source.
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -31,45 +30,43 @@ export function shuffleInPlace<T>(arr: T[], rnd: () => number): T[] {
   return arr;
 }
 
-// Poisson-ish jittered interval around a mean (ms). Uses a clamp so we
-// never go below MIN_INTERVAL or above MAX_INTERVAL — keeps tempo varied
-// but never punishingly fast or boringly slow.
+// Poisson-ish jittered interval around a mean (ms). Clamped so the
+// feed tempo stays in a usable range under varying load.
 export function jitterInterval(
   meanMs: number,
   rnd: () => number,
   minMs = 4000,
   maxMs = 45_000,
 ): number {
-  // Exponential distribution sample → mean*-ln(U)
   const u = Math.max(rnd(), 1e-6);
   const draw = -Math.log(u) * meanMs;
   return Math.max(minMs, Math.min(maxMs, draw));
 }
 
-// --- Core simulator -------------------------------------------------------
+// --- Feed cursor ----------------------------------------------------------
 
-export interface SimulatorOptions {
+export interface FeedOptions {
   seed?: number;
   meanIntervalMs?: number;
 }
 
-export interface SimulatorState {
-  deck: AudioFile[];
+export interface FeedCursor {
+  catalog: AudioFile[];
   cursor: number;
   lastFile: string | null;
   lastNeighborhood: string | null;
   rnd: () => number;
 }
 
-export function createSimulatorState(
+export function createFeedCursor(
   files: AudioFile[],
-  opts: SimulatorOptions = {},
-): SimulatorState {
+  opts: FeedOptions = {},
+): FeedCursor {
   const seed = opts.seed ?? (Date.now() ^ Math.floor(Math.random() * 0xffffffff));
   const rnd = mulberry32(seed);
-  const deck = shuffleInPlace([...files], rnd);
+  const catalog = shuffleInPlace([...files], rnd);
   return {
-    deck,
+    catalog,
     cursor: 0,
     lastFile: null,
     lastNeighborhood: null,
@@ -77,27 +74,27 @@ export function createSimulatorState(
   };
 }
 
-export function nextDispatchCall(state: SimulatorState): DispatchCall {
-  if (state.deck.length === 0) {
-    throw new Error("simulator: empty deck — no audio files available");
+export function nextDispatch(state: FeedCursor): DispatchCall {
+  if (state.catalog.length === 0) {
+    throw new Error("dispatch feed: catalog is empty");
   }
 
-  // Pick the next file in the deck, skipping one slot if it would
-  // immediately repeat the last call (only matters when deck has >1
-  // entry; with a single file we can't avoid the repeat).
-  let file = state.deck[state.cursor]!;
-  if (state.deck.length > 1 && file.file === state.lastFile) {
-    state.cursor = (state.cursor + 1) % state.deck.length;
-    file = state.deck[state.cursor]!;
+  // Walk the catalog, skipping a slot if the next entry would immediately
+  // repeat the last one. With a single-entry catalog the repeat is
+  // unavoidable.
+  let file = state.catalog[state.cursor]!;
+  if (state.catalog.length > 1 && file.file === state.lastFile) {
+    state.cursor = (state.cursor + 1) % state.catalog.length;
+    file = state.catalog[state.cursor]!;
   }
   state.cursor++;
-  if (state.cursor >= state.deck.length) {
-    shuffleInPlace(state.deck, state.rnd);
+  if (state.cursor >= state.catalog.length) {
+    shuffleInPlace(state.catalog, state.rnd);
     state.cursor = 0;
   }
   state.lastFile = file.file;
 
-  // Pick a hotspot, skipping if same-as-last (when possible).
+  // Avoid the same neighborhood twice in a row when there's a choice.
   let hotspot = pickWeightedHotspot(state.rnd);
   if (SF_HOTSPOTS.length > 1) {
     let attempts = 0;
@@ -108,11 +105,11 @@ export function nextDispatchCall(state: SimulatorState): DispatchCall {
   }
   state.lastNeighborhood = hotspot.name;
 
-  // Jitter coords ±~500m so co-located calls don't visually stack.
+  // ±~500m jitter so co-located calls don't visually stack on the map.
   const lat = hotspot.lat + (state.rnd() - 0.5) * 0.006;
   const lng = hotspot.lng + (state.rnd() - 0.5) * 0.008;
 
-  // Build call: manifest meta wins, generated values fill the gaps.
+  // Declared metadata wins; lookup tables fill the gaps.
   const meta = file.meta;
   const callType = meta?.callType ? null : pickWeightedCallType(state.rnd);
   const priority =
@@ -124,13 +121,13 @@ export function nextDispatchCall(state: SimulatorState): DispatchCall {
   const district = meta?.district ?? hotspot.district;
   const address = meta?.address ?? pickAddressForNeighborhood(neighborhood, state.rnd);
   const talkgroup = meta?.talkgroup ?? pickTalkgroup(state.rnd);
-  const callNumber = meta?.callNumber ?? generateCallNumber(state.rnd);
+  const callNumber = meta?.callNumber ?? nextCallNumber(state.rnd);
   const receivedAt = meta?.time ?? new Date().toISOString();
   const recordedAt = meta?.recordedAt ?? null;
   const talkgroupId = meta?.talkgroupId ?? null;
 
   return {
-    id: `sim:${file.file}:${Date.now()}:${Math.floor(state.rnd() * 1e6)}`,
+    id: `${file.file}:${Date.now()}:${Math.floor(state.rnd() * 1e6)}`,
     audioUrl: file.audioUrl,
     callNumber,
     receivedAt,
@@ -147,14 +144,11 @@ export function nextDispatchCall(state: SimulatorState): DispatchCall {
     lat,
     lng,
     fileName: file.file,
-    // "generated" means we made everything up; if filename gave us real
-    // talkgroup/recorded time, only the call-type metadata is synthetic.
-    generated: !meta || meta.callType === undefined,
   };
 }
 
-function generateCallNumber(rnd: () => number): string {
-  // SF CAD numbers look like 9 digits, leading digit usually 2.
+function nextCallNumber(rnd: () => number): string {
+  // SF CAD numbers are 9 digits, typically leading with 2.
   const head = 2 + Math.floor(rnd() * 7);
   const rest = String(Math.floor(rnd() * 1e8)).padStart(8, "0");
   return `${head}${rest}`;

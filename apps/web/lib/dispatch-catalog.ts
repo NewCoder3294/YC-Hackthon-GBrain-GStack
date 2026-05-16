@@ -5,7 +5,7 @@ import { manifestEntrySchema, type AudioFile, type ManifestEntry } from "./dispa
 import { mergeFilenameMeta } from "./dispatch-filename";
 
 const AUDIO_EXTENSIONS = new Set([".m4a", ".mp3", ".wav", ".ogg", ".aac"]);
-const BUCKET = "dispatch-audio";
+const BUCKET = process.env.DISPATCH_AUDIO_BUCKET ?? "dispatch-audio";
 const MANIFEST_KEY = "manifest.json";
 const CACHE_TTL_MS = 60_000;
 
@@ -15,7 +15,10 @@ interface CacheEntry {
 }
 let cache: CacheEntry | null = null;
 
-export async function scanDispatchAudio(): Promise<AudioFile[]> {
+// Returns the dispatch audio catalog: filename + playable URL + (optional)
+// declared metadata. Fails soft: missing service credentials or an empty
+// bucket return [] so the rest of the app degrades to "no activity".
+export async function loadDispatchCatalog(): Promise<AudioFile[]> {
   if (cache && cache.expiresAt > Date.now()) return cache.files;
   if (!env.SUPABASE_SERVICE_ROLE_KEY) return [];
 
@@ -59,7 +62,7 @@ async function loadManifest(
       if (parsed.success) out.set(parsed.data.file, parsed.data);
     }
   } catch {
-    // Unparseable manifest — fall back to filename metadata.
+    // Unparseable — fall back to whatever filename metadata gives us.
   }
   return out;
 }

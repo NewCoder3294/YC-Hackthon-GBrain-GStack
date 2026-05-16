@@ -3,21 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AudioFile, DispatchCall } from "@/lib/dispatch";
 import {
-  createSimulatorState,
+  createFeedCursor,
   jitterInterval,
-  nextDispatchCall,
-  type SimulatorState,
-} from "@/lib/dispatch-simulator";
+  nextDispatch,
+  type FeedCursor,
+} from "@/lib/dispatch-feed";
 
-export interface SimulationConfig {
+export interface DispatchFeedConfig {
   meanIntervalMs?: number;
   maxOnScreen?: number;
   fadeAfterMs?: number;
   initialBurst?: number;
-  seedFromManifest?: boolean;
 }
 
-interface State {
+interface CatalogState {
   files: AudioFile[];
   loading: boolean;
   error: string | null;
@@ -35,19 +34,16 @@ interface Result {
   emitNow: () => void;
 }
 
-const DEFAULT_CONFIG: Required<Omit<SimulationConfig, "seedFromManifest">> & {
-  seedFromManifest: boolean;
-} = {
+const DEFAULT_CONFIG: Required<DispatchFeedConfig> = {
   meanIntervalMs: 14_000,
   maxOnScreen: 50,
   fadeAfterMs: 5 * 60_000,
   initialBurst: 6,
-  seedFromManifest: false,
 };
 
-export function useDispatchSimulation(config: SimulationConfig = {}): Result {
+export function useDispatchFeed(config: DispatchFeedConfig = {}): Result {
   const cfg = { ...DEFAULT_CONFIG, ...config };
-  const [meta, setMeta] = useState<State>({
+  const [catalog, setCatalog] = useState<CatalogState>({
     files: [],
     loading: true,
     error: null,
@@ -56,14 +52,14 @@ export function useDispatchSimulation(config: SimulationConfig = {}): Result {
   const [calls, setCalls] = useState<DispatchCall[]>([]);
   const [paused, setPaused] = useState(false);
 
-  const stateRef = useRef<SimulatorState | null>(null);
+  const cursorRef = useRef<FeedCursor | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pausedRef = useRef(paused);
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
 
-  // Load manifest once.
+  // Load the dispatch catalog once.
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -71,23 +67,28 @@ export function useDispatchSimulation(config: SimulationConfig = {}): Result {
         const res = await fetch("/api/dispatch/manifest", { cache: "no-store" });
         if (!alive) return;
         if (!res.ok) {
-          setMeta({ files: [], loading: false, error: `manifest ${res.status}`, manifestCount: 0 });
+          setCatalog({
+            files: [],
+            loading: false,
+            error: `catalog ${res.status}`,
+            manifestCount: 0,
+          });
           return;
         }
         const body = await res.json();
         const files: AudioFile[] = body.files ?? [];
-        setMeta({
+        setCatalog({
           files,
           loading: false,
-          error: files.length === 0 ? "no audio files in dispatch-audio bucket" : null,
+          error: files.length === 0 ? "catalog empty" : null,
           manifestCount: body.withManifest ?? 0,
         });
       } catch (err) {
         if (!alive) return;
-        setMeta({
+        setCatalog({
           files: [],
           loading: false,
-          error: err instanceof Error ? err.message : "manifest fetch failed",
+          error: err instanceof Error ? err.message : "catalog fetch failed",
           manifestCount: 0,
         });
       }
@@ -97,38 +98,37 @@ export function useDispatchSimulation(config: SimulationConfig = {}): Result {
     };
   }, []);
 
-  // Spin up the simulator state once we have files.
+  // Prime the cursor when the catalog arrives.
   useEffect(() => {
-    if (meta.files.length === 0) {
-      stateRef.current = null;
+    if (catalog.files.length === 0) {
+      cursorRef.current = null;
       return;
     }
-    stateRef.current = createSimulatorState(meta.files);
+    cursorRef.current = createFeedCursor(catalog.files);
 
-    // Seed the map with an initial small burst so the first user doesn't
-    // stare at an empty canvas waiting for the first poisson tick.
+    // Seed the map with a short initial burst so the operator isn't
+    // staring at an empty canvas on first paint.
     setCalls((prev) => {
       if (prev.length > 0) return prev;
-      if (!stateRef.current) return prev;
+      if (!cursorRef.current) return prev;
       const burst: DispatchCall[] = [];
       const now = Date.now();
       for (let i = 0; i < cfg.initialBurst; i++) {
-        const c = nextDispatchCall(stateRef.current);
-        // Backdate so the burst feels recent-but-staggered.
+        const c = nextDispatch(cursorRef.current);
         const ageSec = (cfg.initialBurst - i) * 28;
         burst.push({ ...c, receivedAt: new Date(now - ageSec * 1000).toISOString() });
       }
       return burst;
     });
-  }, [meta.files, cfg.initialBurst]);
+  }, [catalog.files, cfg.initialBurst]);
 
   // Release loop — poisson-ish timer, self-rescheduling.
   const schedule = useCallback(() => {
     const tick = () => {
-      const sim = stateRef.current;
-      if (sim && !pausedRef.current) {
+      const cursor = cursorRef.current;
+      if (cursor && !pausedRef.current) {
         try {
-          const call = nextDispatchCall(sim);
+          const call = nextDispatch(cursor);
           setCalls((prev) => {
             const next = [...prev, call];
             return next.length > cfg.maxOnScreen
@@ -136,7 +136,7 @@ export function useDispatchSimulation(config: SimulationConfig = {}): Result {
               : next;
           });
         } catch {
-          // empty deck — ignore, the next manifest load will rebuild.
+          // Catalog drained — next refresh will rebuild.
         }
       }
       const delay = jitterInterval(cfg.meanIntervalMs, Math.random);
@@ -146,15 +146,15 @@ export function useDispatchSimulation(config: SimulationConfig = {}): Result {
   }, [cfg.maxOnScreen, cfg.meanIntervalMs]);
 
   useEffect(() => {
-    if (meta.files.length === 0) return;
+    if (catalog.files.length === 0) return;
     schedule();
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = null;
     };
-  }, [meta.files, schedule]);
+  }, [catalog.files, schedule]);
 
-  // Fade old calls.
+  // Fade older calls so the on-screen set stays current.
   useEffect(() => {
     const id = setInterval(() => {
       const cutoff = Date.now() - cfg.fadeAfterMs;
@@ -167,10 +167,10 @@ export function useDispatchSimulation(config: SimulationConfig = {}): Result {
   }, [cfg.fadeAfterMs]);
 
   const emitNow = useCallback(() => {
-    const sim = stateRef.current;
-    if (!sim) return;
+    const cursor = cursorRef.current;
+    if (!cursor) return;
     try {
-      const call = nextDispatchCall(sim);
+      const call = nextDispatch(cursor);
       setCalls((prev) => {
         const next = [...prev, call];
         return next.length > cfg.maxOnScreen
@@ -187,12 +187,12 @@ export function useDispatchSimulation(config: SimulationConfig = {}): Result {
       calls,
       paused,
       setPaused,
-      fileCount: meta.files.length,
-      manifestCount: meta.manifestCount,
-      loading: meta.loading,
-      error: meta.error,
+      fileCount: catalog.files.length,
+      manifestCount: catalog.manifestCount,
+      loading: catalog.loading,
+      error: catalog.error,
       emitNow,
     }),
-    [calls, paused, meta.files.length, meta.manifestCount, meta.loading, meta.error, emitNow],
+    [calls, paused, catalog.files.length, catalog.manifestCount, catalog.loading, catalog.error, emitNow],
   );
 }
