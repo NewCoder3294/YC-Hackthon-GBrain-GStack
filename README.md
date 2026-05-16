@@ -5,8 +5,26 @@ Bay Area (CalTrans District 4) CCTV monitoring + incident clipping dashboard.
 - **Repo:** https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack
 - **Vercel:** https://vercel.com/worklessteam-9027s-projects/caltrans-cctv
 - **Supabase:** https://supabase.com/dashboard/project/stfxqaocnyhkumapmbjw
-- **Design spec:** `docs/superpowers/specs/2026-05-16-caltrans-cctv-dashboard-design.md`
-- **P1 plan:** `docs/superpowers/plans/2026-05-16-p1-foundation.md`
+
+## Docs
+
+Start here in this order — each builds on the previous:
+
+1. **[`docs/PRD.md`](docs/PRD.md)** — WatchDog product requirements. What we're
+   building and why. Read first.
+2. **[`docs/TRD.md`](docs/TRD.md)** — technical requirements. Architecture,
+   data model, component ownership across the 5-person team.
+3. **[`docs/STATUS.md`](docs/STATUS.md)** — what's in this repo vs. what lives
+   elsewhere in the wider WatchDog system. Read before assuming a component
+   is here.
+4. **[`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)** — the 3-minute demo
+   walkthrough and Q&A prep. The whole team should be able to deliver this.
+5. **[`docs/superpowers/specs/2026-05-16-caltrans-cctv-dashboard-design.md`](docs/superpowers/specs/2026-05-16-caltrans-cctv-dashboard-design.md)** —
+   design spec for the dispatcher dashboard.
+6. **[`docs/superpowers/plans/`](docs/superpowers/plans/)** — phase plans
+   (P1 done, P2–P6 to be written as phases are claimed).
+7. **[`docs/brainstorm.md`](docs/brainstorm.md)** — origin notes, kept for
+   context.
 
 ## Stack
 
