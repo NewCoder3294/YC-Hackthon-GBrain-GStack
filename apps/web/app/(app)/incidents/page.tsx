@@ -300,8 +300,8 @@ function EmptyState() {
           No incidents match
         </p>
         <p className="mt-2 font-mono text-xs text-neutral-300">
-          Clear filters, capture a clip from the Live Wall, or drop dispatch
-          audio into /public/dispatch-audio/.
+          Clear filters, capture a clip from the Live Wall, or upload dispatch
+          audio to the Supabase dispatch-audio bucket.
         </p>
       </div>
     </div>

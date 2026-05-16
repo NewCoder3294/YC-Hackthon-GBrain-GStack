@@ -79,7 +79,7 @@ export function useDispatchSimulation(config: SimulationConfig = {}): Result {
         setMeta({
           files,
           loading: false,
-          error: files.length === 0 ? "no audio files in /public/dispatch-audio" : null,
+          error: files.length === 0 ? "no audio files in dispatch-audio bucket" : null,
           manifestCount: body.withManifest ?? 0,
         });
       } catch (err) {
