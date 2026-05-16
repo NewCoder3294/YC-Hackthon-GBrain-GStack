@@ -22,7 +22,7 @@ export function TopNav({ email }: { email: string }) {
         <nav className="flex items-center gap-0.5">
           <NavLink href={"/" as Route} label="Wall" />
           <NavLink href={"/map" as Route} label="Map" />
-          <NavLink href={"/kg" as Route} label="KG" />
+          <NavLink href={"/kg" as Route} label="Knowledge Graph" />
           <NavLink href={"/incidents" as Route} label="Incidents" />
         </nav>
       </div>
