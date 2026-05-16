@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit",
     "camera": "tsx src/camera/run.ts",
     "calls": "tsx src/calls/run.ts",
+    "datasf": "tsx src/datasf/run.ts",
     "db:apply": "tsx src/apply-migration.ts",
     "db:stats": "tsx src/check-signals.ts"
   },
