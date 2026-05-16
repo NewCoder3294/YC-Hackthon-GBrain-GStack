@@ -4,6 +4,7 @@ import { OpenclawRealtime } from "./realtime";
 import {
   OpenclawFeed,
   type ActivityCard,
+  type CameraInfo,
   type DecisionHint,
   type Severity,
 } from "./feed";
@@ -28,6 +29,19 @@ interface IncidentRow {
   severity: Severity;
   notes: string | null;
   created_at: string;
+}
+
+interface ClipRow {
+  incident_id: string;
+  cameras: {
+    id: string;
+    caltrans_id: string;
+    route: string;
+    direction: string | null;
+    description: string;
+    stream_url: string;
+    stream_type: "hls" | "mjpeg";
+  } | null;
 }
 
 interface PageTagRow {
@@ -75,6 +89,30 @@ async function loadActivity(): Promise<{
     if (incRes.error) throw new Error(incRes.error.message);
     for (const inc of (incRes.data ?? []) as IncidentRow[]) {
       incidentMap.set(inc.id, inc);
+    }
+  }
+
+  // Map each incident → its primary camera so we can render a live thumbnail
+  // for that row. One query, then a Map lookup per card.
+  const cameraByIncident = new Map<string, CameraInfo>();
+  if (incidentIds.length > 0) {
+    const clipsRes = await supabase
+      .from("clips")
+      .select(
+        "incident_id, cameras (id, caltrans_id, route, direction, description, stream_url, stream_type)",
+      )
+      .in("incident_id", incidentIds);
+    if (!clipsRes.error) {
+      for (const c of (clipsRes.data ?? []) as unknown as ClipRow[]) {
+        if (!c.cameras || cameraByIncident.has(c.incident_id)) continue;
+        cameraByIncident.set(c.incident_id, {
+          streamUrl: c.cameras.stream_url,
+          streamType: c.cameras.stream_type,
+          label: c.cameras.direction
+            ? `${c.cameras.route} ${c.cameras.direction}`
+            : c.cameras.route,
+        });
+      }
     }
   }
 
@@ -136,13 +174,14 @@ async function loadActivity(): Promise<{
       tags: tags.filter((t) => !t.startsWith("decision:")).slice(0, 8),
       mix,
       pageSlug: p.slug,
+      camera: relIncId ? cameraByIncident.get(relIncId) ?? null : null,
     };
   });
 
   cards.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
 
   return {
-    cards: cards.slice(0, 50),
+    cards: cards.slice(0, 25),
     pageCount: pages.length,
     incidentCount: incidentMap.size,
     enrichedCount,
