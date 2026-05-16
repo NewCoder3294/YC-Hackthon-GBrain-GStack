@@ -69,7 +69,10 @@ export async function runTick(): Promise<TickResult> {
     pattern_pages_written: 0,
     intel_pages_written: 0,
   };
-  const ttlMs = cfg.INTERVAL_S * 2 * 1000;
+  // TTL must be at least the fusion bucket size (5 min) so a stable
+  // location-based fusionKey doesn't re-emit within the same bucket as the
+  // cluster grows.
+  const ttlMs = Math.max(cfg.INTERVAL_S * 2, 360) * 1000;
 
   if (cfg.WORKER_MODE === "fusion" || cfg.WORKER_MODE === "both") {
     const clusters = await fuseRecent();
