@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getClipSignedUrl, getIncident } from "../data";
 import { ClipThumbnail } from "../clip-thumbnail";
 import { LiveMjpeg } from "../live-mjpeg";
+import { LiveStream } from "@/components/cameras/live-stream";
 import { thumbnailUrl } from "../thumbnail-url";
 import { EditIncidentForm } from "./edit-form";
 import { TagEditor } from "./tag-editor";
@@ -195,6 +196,8 @@ function ClipViewer({
 }) {
   const showLiveMjpeg =
     !signedUrl && liveStreamType === "mjpeg" && !!liveStreamUrl;
+  const showLiveHls =
+    !signedUrl && liveStreamType === "hls" && !!liveStreamUrl;
 
   return (
     <div className="space-y-3">
@@ -209,15 +212,23 @@ function ClipViewer({
           />
         ) : showLiveMjpeg ? (
           <LiveMjpeg streamUrl={liveStreamUrl!} badgeLabel="Camera live · clip pending" />
+        ) : showLiveHls ? (
+          <>
+            <LiveStream
+              streamUrl={liveStreamUrl!}
+              streamType="hls"
+              showLiveDot
+              className="h-full w-full"
+            />
+            <span className="pointer-events-none absolute left-2 top-2 border border-white/40 bg-black/60 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-white">
+              live · clip pending
+            </span>
+          </>
         ) : (
           <ClipThumbnail
             path={fallbackThumbnail}
             aspect="video"
-            label={
-              liveStreamType === "hls"
-                ? "Clip pending — live HLS feed available on Wall"
-                : "Clip unavailable"
-            }
+            label="Clip unavailable"
             className="!border-0"
           />
         )}

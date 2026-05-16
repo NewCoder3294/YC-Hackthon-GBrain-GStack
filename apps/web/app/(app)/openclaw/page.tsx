@@ -2,6 +2,7 @@ import "server-only";
 import Link from "next/link";
 import type { Route } from "next";
 import { createClient } from "@/lib/supabase/server";
+import { LiveStream } from "@/components/cameras/live-stream";
 import { OpenclawRealtime } from "./realtime";
 
 export const dynamic = "force-dynamic";
@@ -26,34 +27,43 @@ interface IncidentRow {
   created_at: string;
 }
 
+interface ClipRow {
+  incident_id: string;
+  cameras: {
+    id: string;
+    caltrans_id: string;
+    route: string;
+    direction: string | null;
+    description: string;
+    stream_url: string;
+    stream_type: "hls" | "mjpeg";
+  } | null;
+}
+
 interface PageTagRow {
   page_id: number;
   tag: string;
 }
 
+interface CameraInfo {
+  streamUrl: string;
+  streamType: "hls" | "mjpeg";
+  /** "I-280 N" or similar — short location label */
+  label: string;
+}
+
 interface ActivityCard {
-  /** Unique key for React. */
   key: string;
-  /** When this fused/landed. */
   ts: string;
-  /** Incident id if known — drives link target. */
   incidentId: string | null;
-  /** Final title (Claude's if enriched, otherwise raw). */
   title: string;
-  /** Claude's narrative or null. */
   narrative: string | null;
-  /** Decision hint pulled from tags if Claude provided one. */
   decisionHint: "act" | "hold" | "review" | "dismiss" | null;
-  /** Whether Claude enriched this cluster. */
   enriched: boolean;
-  /** Severity from incidents table. */
   severity: "low" | "med" | "high";
-  /** All tags (region, signal, pattern, etc.). */
   tags: string[];
-  /** Brief member breakdown ("11×camera_public") — pulled from raw fused text. */
   mix: string | null;
-  /** The page slug (links to gbrain page if we surface that). */
-  pageSlug: string | null;
+  camera: CameraInfo | null;
 }
 
 const DECISION_VALUES = new Set(["act", "hold", "review", "dismiss"] as const);
@@ -72,7 +82,7 @@ async function loadActivity(): Promise<{
 }> {
   const supabase = await createClient();
 
-  // 1. Pull worker-emitted gbrain pages — the canonical "openclaw observation".
+  // 1. Pull worker-emitted gbrain pages.
   const pagesRes = await supabase
     .from("pages")
     .select("id,slug,type,title,compiled_truth,created_at,updated_at,frontmatter")
@@ -83,7 +93,7 @@ async function loadActivity(): Promise<{
   if (pagesRes.error) throw new Error(pagesRes.error.message);
   const pages = (pagesRes.data ?? []) as PageRow[];
 
-  // 2. Join back to incidents via frontmatter.related_incident_id.
+  // 2. Join to incidents.
   const incidentIds = Array.from(
     new Set(
       pages
@@ -103,7 +113,30 @@ async function loadActivity(): Promise<{
     }
   }
 
-  // 3. Pull tags for these pages.
+  // 3. Join to clips → cameras for the live thumbnail.
+  const cameraByIncident = new Map<string, CameraInfo>();
+  if (incidentIds.length > 0) {
+    const clipsRes = await supabase
+      .from("clips")
+      .select(
+        "incident_id, cameras (id, caltrans_id, route, direction, description, stream_url, stream_type)",
+      )
+      .in("incident_id", incidentIds);
+    if (!clipsRes.error) {
+      for (const c of (clipsRes.data ?? []) as unknown as ClipRow[]) {
+        if (!c.cameras || cameraByIncident.has(c.incident_id)) continue;
+        cameraByIncident.set(c.incident_id, {
+          streamUrl: c.cameras.stream_url,
+          streamType: c.cameras.stream_type,
+          label: c.cameras.direction
+            ? `${c.cameras.route} ${c.cameras.direction}`
+            : c.cameras.route,
+        });
+      }
+    }
+  }
+
+  // 4. Pull tags for these pages.
   const pageIds = pages.map((p) => p.id);
   const tagMap = new Map<number, string[]>();
   if (pageIds.length > 0) {
@@ -120,27 +153,24 @@ async function loadActivity(): Promise<{
     }
   }
 
-  // 4. Build one card per page (which is 1:1 with an openclaw observation).
+  // 5. Build cards.
   let enrichedCount = 0;
   const cards: ActivityCard[] = pages.map((p) => {
     const fm = p.frontmatter as { related_incident_id?: string } | null;
     const relIncId = fm?.related_incident_id ?? null;
     const incident = relIncId ? incidentMap.get(relIncId) : undefined;
+    const camera = relIncId ? cameraByIncident.get(relIncId) ?? null : null;
 
     const tags = tagMap.get(p.id) ?? [];
     const enriched = tags.includes("enriched:claude") || p.title.includes("🤖");
     if (enriched) enrichedCount++;
 
-    // The page body for enriched cards starts with **title**\n\nnarrative.
-    // Strip that out cleanly.
     let narrative: string | null = null;
     if (enriched) {
       const lines = p.compiled_truth.split("\n");
-      // Skip leading **title** line + blank lines, take the next paragraph.
       const startIdx = lines.findIndex((l) => l.startsWith("**") && l.endsWith("**"));
       if (startIdx >= 0) {
         const slice = lines.slice(startIdx + 1).join("\n").trim();
-        // First paragraph (up to the blank line before "decision hint" or members).
         narrative = slice
           .split(/\n\n/)[0]!
           .replace(/_decision hint:.*$/m, "")
@@ -148,12 +178,10 @@ async function loadActivity(): Promise<{
       }
     }
 
-    // Pull decision hint from tags.
     const decisionTag = tags.find((t) => t.startsWith("decision:"));
     const dec = decisionTag?.split(":")[1];
     const decisionHint = dec && isDecision(dec) ? dec : null;
 
-    // Extract the "11×camera_public" mix from the compiled_truth if present.
     const mixMatch = p.compiled_truth.match(/(?:fused\s+)(\d+)\s+signals/i);
     const mix = mixMatch ? `${mixMatch[1]} signals` : null;
 
@@ -161,14 +189,23 @@ async function loadActivity(): Promise<{
       key: p.slug,
       ts: p.updated_at ?? p.created_at,
       incidentId: relIncId,
-      title: enriched ? p.title.replace(/^OpenClaw 🤖 /, "") : (incident?.title ?? p.title),
+      title: enriched
+        ? p.title.replace(/^OpenClaw 🤖 /, "")
+        : incident?.title ?? p.title,
       narrative,
       decisionHint,
       enriched,
       severity: incident?.severity ?? "low",
-      tags: tags.filter((t) => !t.startsWith("decision:")).slice(0, 8),
+      tags: tags
+        .filter(
+          (t) =>
+            !t.startsWith("decision:") &&
+            !t.startsWith("enriched:") &&
+            !t.startsWith("severity:"),
+        )
+        .slice(0, 6),
       mix,
-      pageSlug: p.slug,
+      camera,
     };
   });
 
@@ -185,13 +222,19 @@ async function loadActivity(): Promise<{
 
 function formatRelative(ts: string): string {
   const dt = Date.now() - new Date(ts).getTime();
-  if (dt < 60_000) return `${Math.max(1, Math.floor(dt / 1000))}s ago`;
-  if (dt < 3_600_000) return `${Math.floor(dt / 60_000)}m ago`;
-  if (dt < 86_400_000) return `${Math.floor(dt / 3_600_000)}h ago`;
+  if (dt < 60_000) return `${Math.max(1, Math.floor(dt / 1000))}s`;
+  if (dt < 3_600_000) return `${Math.floor(dt / 60_000)}m`;
+  if (dt < 86_400_000) return `${Math.floor(dt / 3_600_000)}h`;
   return new Date(ts).toISOString().slice(0, 16).replace("T", " ");
 }
 
-const SEVERITY_STYLES: Record<"low" | "med" | "high", string> = {
+const SEVERITY_STRIPE: Record<"low" | "med" | "high", string> = {
+  high: "bg-black",
+  med: "bg-neutral-400",
+  low: "bg-neutral-200",
+};
+
+const SEVERITY_LABEL: Record<"low" | "med" | "high", string> = {
   high: "border-black bg-black text-white",
   med: "border-black bg-white text-black",
   low: "border-neutral-300 bg-white text-neutral-500",
@@ -205,7 +248,6 @@ const DECISION_STYLES: Record<DecisionHint, { label: string; cls: string }> = {
 };
 
 function prettyTag(tag: string): string {
-  // Strip the leading "kind:" prefix so the chip reads as the bare value.
   const idx = tag.indexOf(":");
   return idx > 0 ? tag.slice(idx + 1) : tag;
 }
@@ -229,7 +271,7 @@ export default async function OpenclawPage() {
           </span>
         </div>
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          {lastEventAt ? `last: ${formatRelative(lastEventAt)}` : "no activity"}
+          {lastEventAt ? `${formatRelative(lastEventAt)} ago` : "no activity"}
         </span>
       </header>
 
@@ -237,7 +279,7 @@ export default async function OpenclawPage() {
         <div className="flex flex-1 items-center justify-center p-12">
           <div className="max-w-md space-y-3 text-center">
             <p className="font-mono text-sm text-neutral-500">
-              The worker hasn't fired anything yet.
+              The worker hasn&apos;t fired anything yet.
             </p>
             <p className="font-mono text-xs leading-relaxed text-neutral-400">
               Fusion mode only emits when fresh{" "}
@@ -247,69 +289,91 @@ export default async function OpenclawPage() {
           </div>
         </div>
       ) : (
-        <ol className="flex-1 overflow-y-auto divide-y divide-neutral-200">
+        <ol className="flex-1 overflow-y-auto divide-y divide-neutral-100">
           {cards.map((c) => (
-            <li
-              key={c.key}
-              className="flex flex-col gap-2 px-4 py-3 hover:bg-neutral-50"
-            >
-              {/* Top row: severity, title, time, link */}
-              <div className="flex items-baseline justify-between gap-3">
-                <div className="flex items-baseline gap-2 min-w-0">
-                  <span
-                    className={`shrink-0 border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest ${SEVERITY_STYLES[c.severity]}`}
-                  >
-                    {c.severity}
-                  </span>
-                  {c.enriched && (
+            <li key={c.key} className="group">
+              <Link
+                href={
+                  (c.incidentId ? `/incidents/${c.incidentId}` : "/openclaw") as Route
+                }
+                className="flex items-stretch gap-3 px-4 py-3 hover:bg-neutral-50"
+              >
+                {/* Severity stripe — quick scan column */}
+                <span
+                  aria-hidden
+                  className={`shrink-0 self-stretch w-1 ${SEVERITY_STRIPE[c.severity]}`}
+                />
+
+                {/* Middle: title + narrative + meta */}
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <div className="flex items-baseline gap-2 min-w-0">
                     <span
-                      title="Enriched by Claude"
-                      className="shrink-0 border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-neutral-600"
+                      className={`shrink-0 border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest ${SEVERITY_LABEL[c.severity]}`}
                     >
-                      claude
+                      {c.severity}
                     </span>
-                  )}
-                  <p className="min-w-0 truncate font-mono text-[13px] font-medium text-black">
-                    {c.title}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-baseline gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-400">
-                  <span>{formatRelative(c.ts)}</span>
-                  {c.incidentId && (
-                    <Link
-                      href={`/incidents/${c.incidentId}` as Route}
-                      className="text-neutral-500 hover:text-black"
-                    >
-                      open →
-                    </Link>
-                  )}
-                </div>
-              </div>
+                    {c.enriched && (
+                      <span
+                        title="Claude-enriched"
+                        className="shrink-0 border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-neutral-600"
+                      >
+                        claude
+                      </span>
+                    )}
+                    {c.decisionHint && (
+                      <span
+                        className={`shrink-0 border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest ${DECISION_STYLES[c.decisionHint].cls}`}
+                        title="Claude decision hint"
+                      >
+                        {DECISION_STYLES[c.decisionHint].label}
+                      </span>
+                    )}
+                    <p className="min-w-0 truncate font-mono text-[13px] font-medium text-black">
+                      {c.title}
+                    </p>
+                  </div>
 
-              {/* Narrative */}
-              {c.narrative && (
-                <p className="font-mono text-[11px] leading-relaxed text-neutral-700">
-                  {c.narrative}
-                </p>
-              )}
+                  {c.narrative && (
+                    <p className="font-mono text-[11px] leading-relaxed text-neutral-700 line-clamp-2">
+                      {c.narrative}
+                    </p>
+                  )}
 
-              {/* Bottom row: decision pill + tags + mix */}
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-mono text-[9px] uppercase tracking-widest text-neutral-400">
-                {c.decisionHint && (
-                  <span
-                    className={`border px-1.5 py-0.5 ${DECISION_STYLES[c.decisionHint].cls}`}
-                    title={`Claude's decision hint: ${c.decisionHint}`}
-                  >
-                    {DECISION_STYLES[c.decisionHint].label}
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+                    {c.mix && <span className="text-neutral-500">{c.mix}</span>}
+                    {c.camera && (
+                      <span className="text-neutral-500">{c.camera.label}</span>
+                    )}
+                    {c.tags.map((t) => (
+                      <span key={t} className="text-neutral-400">
+                        #{prettyTag(t)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right: live thumbnail */}
+                <div className="flex shrink-0 flex-col items-end justify-between gap-1">
+                  <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400 tabular-nums">
+                    {formatRelative(c.ts)} ago
                   </span>
-                )}
-                {c.mix && <span className="text-neutral-500">{c.mix}</span>}
-                {c.tags.map((t) => (
-                  <span key={t} className="text-neutral-400">
-                    #{prettyTag(t)}
+                  {c.camera ? (
+                    <LiveStream
+                      streamUrl={c.camera.streamUrl}
+                      streamType={c.camera.streamType}
+                      showLiveDot
+                      className="h-[54px] w-[96px] rounded-sm border border-neutral-200"
+                    />
+                  ) : (
+                    <div className="flex h-[54px] w-[96px] items-center justify-center rounded-sm border border-dashed border-neutral-200 font-mono text-[9px] uppercase tracking-widest text-neutral-300">
+                      no clip
+                    </div>
+                  )}
+                  <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-400 opacity-0 group-hover:opacity-100">
+                    open →
                   </span>
-                ))}
-              </div>
+                </div>
+              </Link>
             </li>
           ))}
         </ol>
