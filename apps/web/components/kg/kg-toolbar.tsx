@@ -28,6 +28,7 @@ const KIND_SWATCH: Record<KgNodeKind, string> = {
   location: "border-neutral-500 bg-white",
   decision: "border-black bg-black",
   dispatch: "border border-neutral-300 border-l-4 border-l-black bg-white",
+  web_context: "border border-double border-black bg-white",
 };
 
 export function KgToolbar({

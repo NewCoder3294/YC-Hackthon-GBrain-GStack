@@ -81,6 +81,12 @@ interface GbrainPageRow {
     confidence?: number | string | null;
     samples?: number | null;
     source?: string | null;
+    // web_context-only fields
+    url?: string | null;
+    verdict?: "corroborate" | "neutral" | "contradict" | null;
+    reasoning?: string | null;
+    relevance?: number | null;
+    source_host?: string | null;
   } | null;
   updated_at: string;
   tags: { tag: string }[] | null;
@@ -97,6 +103,11 @@ interface GbrainRecordView {
   confidence: number | string | null;
   samples: number | null;
   source: string;
+  // web_context-only fields (populated when type === "web_context")
+  url?: string | null;
+  verdict?: "corroborate" | "neutral" | "contradict" | null;
+  relevance?: number | null;
+  source_host?: string | null;
 }
 
 interface GangEventRow {
@@ -242,6 +253,10 @@ export async function loadKgFromSupabase(): Promise<{
       confidence: fm.confidence ?? null,
       samples: fm.samples ?? null,
       source: fm.source ?? "gbrain",
+      url: fm.url ?? null,
+      verdict: fm.verdict ?? null,
+      relevance: fm.relevance ?? null,
+      source_host: fm.source_host ?? null,
     };
   });
   const events = (eventsRes.data ?? []) as GangEventRow[];
@@ -420,6 +435,37 @@ export async function loadKgFromSupabase(): Promise<{
           source: `gang:${r.related_gang_id}`,
           target: `gbrain:${r.id}`,
           label: "context",
+        });
+      }
+    } else if (r.kind === "web_context") {
+      const verdict = r.verdict ?? "neutral";
+      const host = r.source_host ?? "";
+      const meta: Record<string, string | number> = { source: r.source };
+      if (r.confidence != null) meta.confidence = Number(r.confidence).toFixed(2);
+      if (r.relevance != null) meta.relevance = Number(r.relevance).toFixed(2);
+      if (host) meta.host = host;
+      meta.verdict = verdict;
+      if (r.url) meta.url = r.url;
+      nodes.push({
+        id: `gbrain:${r.id}`,
+        kind: "web_context",
+        label: r.title || host || "Web result",
+        sub: host ? `${host} · ${verdict}` : verdict,
+        meta,
+        source: "live",
+      });
+      if (r.related_incident_id) {
+        const edgeLabel =
+          verdict === "corroborate"
+            ? "corroborates"
+            : verdict === "contradict"
+              ? "contradicts"
+              : "context";
+        edges.push({
+          id: `e:inc-web:${r.id}`,
+          source: `inc:${r.related_incident_id}`,
+          target: `gbrain:${r.id}`,
+          label: edgeLabel,
         });
       }
     }

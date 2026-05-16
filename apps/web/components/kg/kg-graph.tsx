@@ -64,6 +64,7 @@ function layoutPositions(
     dispatch: 230,
     pattern: 280,
     baseline: 80,
+    web_context: 340,
   };
   nodes.forEach((n) => {
     const baseAngle = ((kindOffsets[n.kind] ?? 0) / 360) * Math.PI * 2;
@@ -217,6 +218,7 @@ function GraphInner({ nodes, edges }: Props) {
       location: 0,
       decision: 0,
       dispatch: 0,
+      web_context: 0,
     } satisfies Record<KgNodeKind, number>;
     for (const n of nodes) out[n.kind]++;
     return out;

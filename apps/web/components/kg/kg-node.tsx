@@ -21,6 +21,8 @@ const SHAPE: Record<KgNodeKind, string> = {
   location: "border border-neutral-500 bg-white",
   decision: "border border-black bg-black text-white",
   dispatch: "border border-neutral-300 border-l-[3px] border-l-black bg-white",
+  web_context:
+    "border-2 border-double border-black bg-white italic text-neutral-700",
 };
 
 const DOT: Record<KgNodeKind, string> = {
@@ -36,6 +38,7 @@ const DOT: Record<KgNodeKind, string> = {
   location: "bg-neutral-500",
   decision: "bg-white",
   dispatch: "bg-black",
+  web_context: "border border-double border-black bg-white",
 };
 
 export interface KgNodeData {

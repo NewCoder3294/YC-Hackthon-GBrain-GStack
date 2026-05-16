@@ -48,7 +48,8 @@ function rewriteManifest(body: string, target: URL, origin: string): string {
 // open tile on the wall; without coalescing we hammer Caltrans with ~N
 // duplicate fetches per refresh interval. TTL is well under the segment
 // duration so latency vs. freshness stays balanced.
-const MANIFEST_TTL_MS = 8_000;
+const MANIFEST_TTL_MS = 12_000;
+const MANIFEST_SWR_S = 30;
 const manifestCache = new Map<string, { body: string; expiresAt: number }>();
 const inflight = new Map<string, Promise<string>>();
 
@@ -116,7 +117,11 @@ export async function GET(request: NextRequest) {
     }
     const rewritten = rewriteManifest(body, target, origin);
     headers.set("content-type", "application/vnd.apple.mpegurl");
-    headers.set("cache-control", `public, max-age=${Math.floor(MANIFEST_TTL_MS / 1000)}`);
+    const ttlS = Math.floor(MANIFEST_TTL_MS / 1000);
+    headers.set(
+      "cache-control",
+      `public, max-age=${ttlS}, s-maxage=${ttlS}, stale-while-revalidate=${MANIFEST_SWR_S}`,
+    );
     return new NextResponse(rewritten, { status: 200, headers });
   }
 
@@ -134,7 +139,17 @@ export async function GET(request: NextRequest) {
 
   const contentType = upstream.headers.get("content-type") ?? "";
   if (contentType) headers.set("content-type", contentType);
-  headers.set("cache-control", "no-store");
+  // HLS segments (.ts/.m4s) are immutable once published — let Vercel's edge
+  // serve repeats so we don't re-fetch from Caltrans for every viewer.
+  const isSegment = /\.(ts|m4s|mp4|aac|key)$/i.test(target.pathname);
+  if (isSegment) {
+    headers.set(
+      "cache-control",
+      "public, max-age=60, s-maxage=300, stale-while-revalidate=600, immutable",
+    );
+  } else {
+    headers.set("cache-control", "no-store");
+  }
   return new NextResponse(upstream.body, { status: 200, headers });
 }
 

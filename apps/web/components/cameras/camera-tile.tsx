@@ -32,9 +32,13 @@ export function CameraTile({ camera, onStatusChange }: Props) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [status, setStatus] = useState<CameraStatus>("idle");
 
+  const onStatusChangeRef = useRef(onStatusChange);
   useEffect(() => {
-    onStatusChange?.(status);
-  }, [status, onStatusChange]);
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
+  useEffect(() => {
+    onStatusChangeRef.current?.(status);
+  }, [status]);
 
   // Lazy-attach: only mount stream when scrolled into view
   useEffect(() => {
