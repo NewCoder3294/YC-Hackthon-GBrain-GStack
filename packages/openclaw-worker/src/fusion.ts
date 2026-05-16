@@ -117,26 +117,37 @@ export function clusterSignals(
     }
   }
 
-  // Filter by minSignals and finalize a deterministic fusionKey per cluster.
+  // Filter by minSignals and stamp a STABLE location+time-bucket fusionKey.
+  // Stability matters because the same incident grows across ticks: events
+  // arrive faster than INTERVAL_S, so each tick sees a larger superset. A
+  // member-set hash would emit a "new" incident every time the cluster
+  // gained a member, which produced KG spam (25 nodes for 3 actual events).
+  //
+  // Bucket lat/lng to ~100m and earliest_at to 5-minute slots. Same corner
+  // + same 5-min window = same key = the dedupe in tick.ts swallows it.
   return clusters
     .filter((c) => c.members.length >= opts.minSignals)
     .map((c) => ({
       ...c,
-      fusionKey: makeFusionKey(c.members.map((m) => m.id)),
+      fusionKey: makeLocationFusionKey(c.centroidLat, c.centroidLng, c.earliestAt),
     }));
 }
 
-function makeFusionKey(ids: string[]): string {
-  // Deterministic: 12-char hex digest of sorted ids — same cluster (whether
-  // reprocessed or seen via a different polling pass) produces the same slug.
-  const sorted = [...ids].sort();
-  let h = 0n;
-  for (const id of sorted) {
-    for (const ch of id) {
-      h = (h * 1099511628211n + BigInt(ch.charCodeAt(0))) & 0xffffffffffffffffn;
-    }
-  }
-  return h.toString(16).padStart(16, "0").slice(0, 12);
+const FUSION_BUCKET_MS = 5 * 60 * 1000; // 5 minutes
+
+export function makeLocationFusionKey(lat: number, lng: number, earliestAt: Date): string {
+  // 3 decimal places: ~111m at the equator, ~90m at SF longitude. Comfortably
+  // narrower than the 300m fusion radius so two adjacent clusters get
+  // distinct keys; wider than typical GPS jitter so the same corner stays
+  // stable as the centroid drifts with new members.
+  const latRounded = Math.round(lat * 1000) / 1000;
+  const lngRounded = Math.round(lng * 1000) / 1000;
+  const bucket = Math.floor(earliestAt.getTime() / FUSION_BUCKET_MS);
+  // Encode lat/lng without minus signs / dots so the slug is URL-safe and
+  // visually scans like the existing gbrain slugs.
+  const latStr = latRounded.toFixed(3).replace(/[.-]/g, "_");
+  const lngStr = lngRounded.toFixed(3).replace(/[.-]/g, "_");
+  return `loc${latStr}_${lngStr}_t${bucket}`;
 }
 
 /**
