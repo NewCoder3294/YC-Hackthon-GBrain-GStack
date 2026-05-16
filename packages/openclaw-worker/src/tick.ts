@@ -104,10 +104,19 @@ export async function runTick(): Promise<TickResult> {
       if (!shouldEmit(`fusion:${cluster.fusionKey}`, ttlMs)) continue;
       try {
         const enriched = await enrichCluster(cluster, llmCallsThisTick);
-        if (enriched) {
-          llmCallsThisTick++;
-          result.enriched++;
+        if (!enriched) {
+          // No Claude analysis = no incident emitted. We'd rather skip than
+          // post a "Fused incident — N signals" stub. The cluster will
+          // get another chance on the next tick if it's still around.
+          log.info({
+            scope: "tick",
+            msg: "skipping cluster — no Claude description available",
+            extra: { fusion_key: cluster.fusionKey, priority: r.priority },
+          });
+          continue;
         }
+        llmCallsThisTick++;
+        result.enriched++;
         await emitFusionIncident(cluster, r, enriched, result);
       } catch (err) {
         log.error({
