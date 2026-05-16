@@ -2,8 +2,11 @@
 
 Bay Area (CalTrans District 4) CCTV monitoring + incident clipping dashboard.
 
+- **Repo:** https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack
+- **Vercel:** https://vercel.com/worklessteam-9027s-projects/caltrans-cctv
+- **Supabase:** https://supabase.com/dashboard/project/stfxqaocnyhkumapmbjw
 - **Design spec:** `docs/superpowers/specs/2026-05-16-caltrans-cctv-dashboard-design.md`
-- **P1 plan (this one):** `docs/superpowers/plans/2026-05-16-p1-foundation.md`
+- **P1 plan:** `docs/superpowers/plans/2026-05-16-p1-foundation.md`
 
 ## Stack
 
@@ -22,21 +25,32 @@ packages/db      Drizzle schema + typed client
 packages/sync    CalTrans catalog parser + upsert
 ```
 
-## First-time setup
+## Teammate onboarding (5 minutes)
 
-1. Create Supabase project. Copy URL + anon key + service role + connection string.
-2. Storage: create `clips` (private) and `thumbnails` (public) buckets.
-3. `cp apps/web/.env.example apps/web/.env.local` and fill in values.
-4. Apply migrations:
+1. **Get added to the Supabase project, GitHub repo, and Vercel project.** Ask Nicolas.
+2. **Clone + install:**
    ```bash
-   DATABASE_URL="<pooler-url>" pnpm db:migrate
+   git clone https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack.git caltrans-cctv
+   cd caltrans-cctv
+   pnpm install
    ```
-5. Seed cameras (manual trigger):
+3. **Pull env vars from Vercel** (one command — no manual copying):
+   ```bash
+   npx vercel link --yes --project caltrans-cctv
+   npx vercel env pull apps/web/.env.local
+   ```
+   That populates `apps/web/.env.local` with everything: Supabase URL, anon key, service role, `DATABASE_URL`, and `CRON_SECRET`. No need to hunt through dashboards.
+4. **Run dev:**
+   ```bash
+   pnpm dev
+   ```
+   Open http://localhost:3000 — you'll be redirected to `/login`. Sign in with a Supabase Auth user (create one in the Supabase dashboard → Authentication → Users).
+5. **Seed cameras** (one-time, only if the `cameras` table is empty):
    ```bash
    curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/sync-cameras
    ```
 
-## Dev
+## Dev commands
 
 ```bash
 pnpm dev          # all packages
@@ -45,16 +59,33 @@ pnpm typecheck    # tsc --noEmit across workspace
 pnpm build        # production build
 ```
 
-## Parallel phases (after P1 lands)
+## Deploys
 
-- **P2 — Live Wall** — `apps/web/app/(app)/page.tsx`, grid view + players
-- **P3 — Buffer + Clipping** — `apps/web/lib/buffer/*`, MediaRecorder + IndexedDB
-- **P4 — Map** — `apps/web/app/(app)/map/page.tsx`, MapLibre
-- **P5 — Incidents** — `apps/web/app/(app)/incidents/*`, table + detail
-- **P6 — Polish** — keyboard shortcuts, perf, error states
+- **Production:** every push to `main` auto-deploys to https://caltrans-cctv.vercel.app
+- **Preview:** every PR gets its own preview URL with the same env vars
+- **Cron:** `/api/cron/sync-cameras` runs daily at 09:00 UTC, gated by `CRON_SECRET`
 
-Each phase has its own plan file in `docs/superpowers/plans/`.
+Don't merge anything to `main` without Nicolas's approval.
 
-## Aesthetic
+## Parallel phases (claim one)
+
+After P1 (foundation, done), these can each be worked in parallel — pick one and open a branch:
+
+- **P2 — Live Wall** — `apps/web/app/(app)/page.tsx`, grid view + HLS/MJPEG players
+- **P3 — Buffer + Clipping** — `apps/web/lib/buffer/*`, MediaRecorder + IndexedDB rolling buffer
+- **P4 — Map** — `apps/web/app/(app)/map/page.tsx`, MapLibre + desaturated tiles
+- **P5 — Incidents** — `apps/web/app/(app)/incidents/*`, data table + detail page
+- **P6 — Polish** — keyboard shortcuts, perf, empty/error states
+
+Each phase has (or will have) its own plan file in `docs/superpowers/plans/`. Ask Nicolas before starting work on a phase that doesn't yet have a plan.
+
+## Aesthetic — non-negotiable
 
 Pure black and white. No color. Status uses iconography, weight, and motion — never hue. See the design spec § "Aesthetic Spec" for the full token set.
+
+## Branch + commit conventions
+
+- Branch names: `feat/p<N>-<short-name>` (e.g. `feat/p2-live-wall`)
+- Commits: conventional commits — `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `perf:`
+- Commit subject ≤72 chars, imperative mood, no period
+- Tests required for parser/data-layer code; UI changes can ship without (we'll add Playwright in P6)
