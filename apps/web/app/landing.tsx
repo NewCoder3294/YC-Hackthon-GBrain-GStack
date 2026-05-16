@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -31,12 +31,6 @@ const SOURCE_GLYPH: Record<SourceType, string> = {
   shotspotter: "SHT",
 };
 
-const ROUTES = [
-  "I-880 E", "I-880 W", "I-80 E", "I-80 W", "I-280 N", "I-280 S",
-  "US-101 N", "US-101 S", "I-580 E", "I-580 W", "I-680 N", "I-680 S",
-  "CA-13 N", "CA-13 S", "CA-92 E", "CA-92 W", "I-238", "CA-24", "CA-87",
-];
-
 function pad(n: number, w = 2) {
   return n.toString().padStart(w, "0");
 }
@@ -50,6 +44,7 @@ export function Landing() {
     <main className="relative min-h-screen overflow-x-hidden bg-white text-black">
       <Header />
       <Hero />
+      <HowItWorks />
       <Pillars />
       <NotSection />
       <ClosingCta />
@@ -111,7 +106,8 @@ function Hero() {
       <ScanLine />
       <div className="relative mx-auto grid max-w-6xl grid-cols-1 gap-12 px-6 pb-20 pt-16 lg:grid-cols-[1.1fr_1fr] lg:gap-16 lg:pb-28 lg:pt-24">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+          <YCBadge />
+          <p className="mt-5 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
             San Francisco · Real-Time Crime Center
           </p>
           <h1 className="mt-6 font-mono text-3xl leading-[1.1] tracking-tight md:text-5xl">
@@ -146,7 +142,6 @@ function Hero() {
         </div>
         <SignalFeed />
       </div>
-      <Marquee />
     </section>
   );
 }
@@ -232,61 +227,66 @@ function Stat({ label, target }: { label: string; target: number }) {
   );
 }
 
-function Marquee() {
-  const items = useMemo(() => [...ROUTES, ...ROUTES], []);
+function YCBadge() {
   return (
-    <div className="relative overflow-hidden border-t border-neutral-200 bg-white py-3">
-      <div
-        className="flex w-max gap-12 whitespace-nowrap"
-        style={{ animation: "wd-marquee 40s linear infinite" }}
-      >
-        {items.map((r, i) => (
-          <span
-            key={`${r}-${i}`}
-            className="font-mono text-[10px] uppercase tracking-widest text-neutral-400"
-          >
-            <span className="mr-2 text-black">●</span>
-            CalTrans D4 · {r}
-          </span>
-        ))}
-      </div>
-    </div>
+    <a
+      href="https://events.ycombinator.com/GStack"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="group inline-flex items-center gap-2 border border-[#FF6601] bg-white py-1 pl-1 pr-3 font-mono text-[10px] uppercase tracking-widest text-[#FF6601] transition-colors hover:bg-[#FFF1E8]"
+    >
+      <Image
+        src="/yc-logo.png"
+        alt="Y Combinator"
+        width={20}
+        height={20}
+        priority
+        className="block"
+      />
+      <span>Built at YC · GStack × GBrain Hackathon</span>
+    </a>
   );
 }
 
+type FeedPhase = "idle" | "ingesting" | "fusing" | "fused" | "held";
+
 function SignalFeed() {
-  const [signals, setSignals] = useState<Signal[]>([]);
-  const [fused, setFused] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [filled, setFilled] = useState<(Signal | null)[]>([null, null, null, null]);
+  const [phase, setPhase] = useState<FeedPhase>("idle");
   const counterRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
 
-    function pushOne(s: Omit<Signal, "id" | "ts">) {
-      if (cancelled) return;
-      counterRef.current += 1;
-      const ts = fmtTime(new Date());
-      setSignals((prev) => [{ ...s, id: counterRef.current, ts }, ...prev].slice(0, 6));
-    }
-
     async function run() {
       while (!cancelled) {
-        setSignals([]);
-        setFused(false);
-        setDismissed(false);
-        await wait(900);
-        for (const s of SCENARIO) {
+        setFilled([null, null, null, null]);
+        setPhase("idle");
+        await wait(700);
+        if (cancelled) return;
+        setPhase("ingesting");
+        for (let i = 0; i < SCENARIO.length; i++) {
           if (cancelled) return;
-          pushOne(s);
-          await wait(1500 + Math.random() * 800);
+          counterRef.current += 1;
+          const ts = fmtTime(new Date());
+          const scenarioItem = SCENARIO[i];
+          if (!scenarioItem) continue;
+          const s: Signal = { ...scenarioItem, id: counterRef.current, ts };
+          setFilled((prev) => {
+            const next = [...prev];
+            next[i] = s;
+            return next;
+          });
+          await wait(900 + Math.random() * 400);
         }
+        if (cancelled) return;
+        setPhase("fusing");
         await wait(900);
         if (cancelled) return;
-        setFused(true);
-        await wait(2600);
+        setPhase("fused");
+        await wait(2400);
         if (cancelled) return;
-        setDismissed(true);
+        setPhase("held");
         await wait(1800);
       }
     }
@@ -296,13 +296,14 @@ function SignalFeed() {
     };
   }, []);
 
-  const severity: Severity = fused ? "high" : "med";
+  const filledCount = filled.filter(Boolean).length;
+  const showFused = phase === "fused" || phase === "held";
 
   return (
     <div className="relative">
       <div className="absolute -inset-1 -z-10 bg-neutral-100/50" aria-hidden />
-      <div className="border border-black bg-white">
-        <div className="flex items-center justify-between border-b border-neutral-200 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+      <div className="flex h-[420px] flex-col border border-black bg-white">
+        <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           <span className="flex items-center gap-1.5">
             <span
               className="inline-block h-1.5 w-1.5 rounded-full bg-black"
@@ -310,85 +311,132 @@ function SignalFeed() {
             />
             Dispatcher queue · live
           </span>
-          <span>signals · {signals.length}</span>
+          <span className="tabular-nums">
+            signals · {filledCount}/{SCENARIO.length}
+          </span>
         </div>
 
-        {fused && (
-          <FusedIncident
-            severity={severity}
-            count={SCENARIO.length}
-            dismissed={dismissed}
-          />
-        )}
-
-        <ul className="divide-y divide-neutral-200">
-          {signals.length === 0 && !fused && (
-            <li className="px-3 py-8 text-center font-mono text-[10px] uppercase tracking-widest text-neutral-300">
-              awaiting signals
-            </li>
-          )}
-          {signals.map((s) => (
-            <li
-              key={s.id}
-              className="px-3 py-2.5"
-              style={{ animation: "wd-slide-in 420ms ease-out both" }}
-            >
-              <div className="flex items-baseline justify-between gap-3 font-mono text-[11px]">
-                <span className="flex items-baseline gap-3 truncate">
-                  <span className="text-neutral-400">{s.ts}</span>
-                  <span className="border border-black px-1 py-0.5 text-[9px] uppercase tracking-widest">
-                    {SOURCE_GLYPH[s.source]}
-                  </span>
-                  <span className="truncate text-black">{s.location}</span>
-                </span>
-                <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-                  {s.detail}
-                </span>
-              </div>
-            </li>
+        <div className="flex flex-1 flex-col divide-y divide-neutral-200">
+          {filled.map((s, i) => (
+            <SignalRow key={i} signal={s} index={i} fusing={phase === "fusing"} />
           ))}
-        </ul>
+        </div>
 
-        <div className="border-t border-neutral-200 bg-neutral-50 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          <Caret /> correlator window · 200m · 60s
+        <FusedSlot visible={showFused} held={phase === "held"} />
+
+        <div className="shrink-0 border-t border-neutral-200 bg-neutral-50 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+          <Caret /> correlator · 200m · 60s · {phaseLabel(phase)}
         </div>
       </div>
     </div>
   );
 }
 
-function FusedIncident({
-  severity,
-  count,
-  dismissed,
+function phaseLabel(p: FeedPhase) {
+  switch (p) {
+    case "idle": return "standby";
+    case "ingesting": return "ingesting";
+    case "fusing": return "correlating…";
+    case "fused": return "fused → dispatcher";
+    case "held": return "held by dispatcher";
+  }
+}
+
+function SignalRow({
+  signal,
+  index,
+  fusing,
 }: {
-  severity: Severity;
-  count: number;
-  dismissed: boolean;
+  signal: Signal | null;
+  index: number;
+  fusing: boolean;
 }) {
+  const PLACEHOLDER_ORDER = ["camera", "call", "shotspotter", "citizen"] as const satisfies readonly SourceType[];
+  const placeholderSrc: SourceType =
+    PLACEHOLDER_ORDER[index % PLACEHOLDER_ORDER.length] ?? "camera";
   return (
     <div
-      className="border-b border-black bg-black px-3 py-3 text-white"
-      style={{ animation: "wd-slide-in 480ms ease-out both" }}
+      className="flex h-full min-h-0 flex-1 items-center px-3"
+      style={{
+        background: fusing && signal ? "rgba(0,0,0,0.04)" : undefined,
+        transition: "background 320ms ease",
+      }}
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="flex items-baseline gap-2 font-mono text-[11px] uppercase tracking-widest">
-          <span className="border border-white px-1 py-0.5 text-[9px]">
-            {severity}
+      {signal ? (
+        <div
+          className="flex w-full items-baseline justify-between gap-3 font-mono text-[11px]"
+          style={{ animation: "wd-slide-in 360ms ease-out both" }}
+        >
+          <span className="flex items-baseline gap-3 truncate">
+            <span className="tabular-nums text-neutral-400">{signal.ts}</span>
+            <span className="border border-black px-1 py-0.5 text-[9px] uppercase tracking-widest">
+              {SOURCE_GLYPH[signal.source]}
+            </span>
+            <span className="truncate text-black">{signal.location}</span>
           </span>
-          Possible assault · Mission & 16th
-        </span>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-300">
-          {count} signals
-        </span>
-      </div>
-      <div className="mt-2 flex items-baseline justify-between gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-300">
-        <span>
-          GBrain: 4 dismissed at this corner / 30d · bar-closing crowd
-        </span>
-        <span className="text-white">
-          {dismissed ? "→ dispatcher held" : "→ awaiting decision"}
-        </span>
+          <span className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+            {signal.detail}
+          </span>
+        </div>
+      ) : (
+        <div className="flex w-full items-baseline justify-between gap-3 font-mono text-[11px] text-neutral-300">
+          <span className="flex items-baseline gap-3">
+            <span className="tabular-nums">--:--:--</span>
+            <span className="border border-neutral-200 px-1 py-0.5 text-[9px] uppercase tracking-widest">
+              {SOURCE_GLYPH[placeholderSrc]}
+            </span>
+            <span>awaiting</span>
+          </span>
+          <span className="font-mono text-[10px] uppercase tracking-widest">
+            —
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FusedSlot({ visible, held }: { visible: boolean; held: boolean }) {
+  return (
+    <div
+      className={`shrink-0 overflow-hidden border-t ${
+        visible ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-neutral-400"
+      }`}
+      style={{
+        height: 84,
+        transition: "background 280ms ease, color 280ms ease, border-color 280ms ease",
+      }}
+    >
+      <div
+        className="px-3 py-3"
+        style={{
+          opacity: visible ? 1 : 0.55,
+          transition: "opacity 240ms ease",
+        }}
+      >
+        {visible ? (
+          <>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="flex items-baseline gap-2 font-mono text-[11px] uppercase tracking-widest">
+                <span className="border border-white px-1 py-0.5 text-[9px]">high</span>
+                Possible assault · Mission &amp; 16th
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-300">
+                {SCENARIO.length} signals
+              </span>
+            </div>
+            <div className="mt-2 flex items-baseline justify-between gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-300">
+              <span>GBrain: 4 dismissals · 30d · bar-closing crowd</span>
+              <span className="text-white">
+                {held ? "→ dispatcher held" : "→ awaiting decision"}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex h-full items-center justify-center font-mono text-[10px] uppercase tracking-widest">
+            ⟶ correlator output · awaiting fusion
+          </div>
+        )}
       </div>
     </div>
   );
@@ -406,12 +454,518 @@ function Caret() {
   );
 }
 
+function HowItWorks() {
+  return (
+    <>
+      <section id="how" className="border-b border-neutral-200">
+        <div className="mx-auto max-w-6xl px-6 pt-20 pb-6">
+          <div className="flex items-baseline justify-between gap-6">
+            <h2 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+              How it works
+            </h2>
+            <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
+              three steps · 200 m / 60 s window
+            </span>
+          </div>
+          <p className="mt-6 max-w-2xl font-mono text-sm leading-relaxed text-neutral-700">
+            Four siloed signal streams become one ranked queue, an institutional
+            memory of every prior decision, and a public audit trail the camera
+            owner controls.
+          </p>
+        </div>
+      </section>
+
+      <HowStep
+        n="01"
+        title="Fusion"
+        kicker="Correlate signals across silos"
+        caption="A 911 hangup, a streetlight pose detection, a citizen report, and a ShotSpotter ping arrive in four different systems. WatchDog joins them on a 200 m / 60 s window and emits one ranked incident with the strongest evidence on top."
+        bullets={[
+          "Spatial-temporal cosine match across CAM, 911, RPT, SHT",
+          "Severity scored from source confidence + signal density",
+          "Replaces four dashboards with one queue per dispatcher",
+        ]}
+        diagram={<FusionDiagram />}
+      />
+
+      <HowStep
+        n="02"
+        title="Memory"
+        kicker="Carry context to the next signal"
+        mirror
+        caption="Every reviewed incident — dismissed, held, or escalated — writes to GBrain as a memory chip on that corner. The next signal at the same place arrives with all prior decisions, baselines, and dispatcher notes already attached."
+        bullets={[
+          "Per-location memory store: outcomes, reasons, baselines",
+          "Pattern recall surfaces 'this looked the same 4× last month'",
+          "Reduces false dispatch from familiar corners over time",
+        ]}
+        diagram={<MemoryDiagram />}
+      />
+
+      <HowStep
+        n="03"
+        title="Consent"
+        kicker="Owner-authored access, both ways logged"
+        caption="Camera owners — homeowners, businesses, CalTrans — author the policy themselves: geofence, time windows, incident types, warrant requirements. The gate runs as code on every police query. Allowed and denied alike are written to the owner's audit log."
+        bullets={[
+          "Policy-as-code: declarative rules, no human-in-the-loop required",
+          "Symmetric audit: police and owner both see the access trail",
+          "Defaults to deny when a rule is missing — never opt-in by silence",
+        ]}
+        diagram={<ConsentDiagram />}
+      />
+    </>
+  );
+}
+
+function HowStep({
+  n,
+  title,
+  kicker,
+  caption,
+  bullets,
+  diagram,
+  mirror,
+}: {
+  n: string;
+  title: string;
+  kicker: string;
+  caption: string;
+  bullets: string[];
+  diagram: React.ReactNode;
+  mirror?: boolean;
+}) {
+  return (
+    <section className="border-b border-neutral-200">
+      <div className="mx-auto max-w-6xl px-6 py-20 lg:py-24">
+        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[5fr_7fr] lg:gap-16">
+          <div className={mirror ? "lg:order-2" : ""}>
+            <div className="flex items-baseline gap-4">
+              <span className="font-mono text-5xl leading-none tracking-tight text-neutral-200 tabular-nums">
+                {n}
+              </span>
+              <div className="flex flex-col">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                  {kicker}
+                </span>
+                <h3 className="font-mono text-2xl tracking-tight md:text-3xl">
+                  {title}
+                </h3>
+              </div>
+            </div>
+            <p className="mt-6 max-w-md font-mono text-sm leading-relaxed text-neutral-700">
+              {caption}
+            </p>
+            <ul className="mt-6 space-y-3">
+              {bullets.map((b) => (
+                <li
+                  key={b}
+                  className="flex items-baseline gap-3 font-mono text-[11px] uppercase tracking-widest text-neutral-700"
+                >
+                  <span className="text-neutral-400">▸</span>
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className={mirror ? "lg:order-1" : ""}>
+            <div className="border border-neutral-200 bg-white p-4 md:p-6">
+              {diagram}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const DIAGRAM_STROKE = "#000";
+const DIAGRAM_MUTED = "#9ca3af";
+const DIAGRAM_ACCENT = "#FF6601";
+const PX_MONO = "ui-monospace, 'SF Mono', monospace";
+
+function ArrowDef({ id, color = DIAGRAM_STROKE }: { id: string; color?: string }) {
+  return (
+    <defs>
+      <marker
+        id={id}
+        viewBox="0 0 8 8"
+        refX="7"
+        refY="4"
+        markerWidth="6"
+        markerHeight="6"
+        orient="auto-start-reverse"
+      >
+        <path d="M0,0 L8,4 L0,8 z" fill={color} />
+      </marker>
+    </defs>
+  );
+}
+
+function ZoneFrame({
+  x,
+  y,
+  w,
+  h,
+  step,
+  label,
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  step: string;
+  label: string;
+}) {
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        fill="white"
+        stroke={DIAGRAM_MUTED}
+        strokeDasharray="2 3"
+      />
+      <text
+        x={x + 8}
+        y={y + 14}
+        fontFamily={PX_MONO}
+        fontSize="8"
+        fill={DIAGRAM_MUTED}
+        letterSpacing="1.2"
+      >
+        {step.toUpperCase()} · {label.toUpperCase()}
+      </text>
+    </g>
+  );
+}
+
+function FusionDiagram() {
+  const sources: { glyph: string; label: string; ts: string; meta: string }[] = [
+    { glyph: "CAM", label: "Streetlight 14B", ts: "22:50:01", meta: "pose: fighting · 0.87" },
+    { glyph: "911", label: "Hangup", ts: "22:50:08", meta: "no callback" },
+    { glyph: "SHT", label: "ShotSpotter", ts: "22:50:18", meta: "1 report" },
+    { glyph: "RPT", label: "Citizen", ts: "22:50:22", meta: "\"two men arguing\"" },
+  ];
+  const baseY = 36;
+  const rowH = 32;
+  return (
+    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Fusion diagram">
+      <ArrowDef id="arr-fusion" />
+      <ZoneFrame x={4} y={4} w={180} h={272} step="01" label="signals" />
+      <ZoneFrame x={196} y={4} w={132} h={272} step="02" label="correlator" />
+      <ZoneFrame x={340} y={4} w={136} h={272} step="03" label="incident" />
+
+      {sources.map((s, i) => {
+        const y = baseY + i * rowH;
+        return (
+          <g key={s.glyph}>
+            <text x={16} y={y + 12} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+              {s.ts}
+            </text>
+            <rect x={16} y={y + 16} width={28} height={14} fill="white" stroke={DIAGRAM_STROKE} />
+            <text
+              x={30}
+              y={y + 26}
+              textAnchor="middle"
+              fontFamily={PX_MONO}
+              fontSize="8"
+              fill={DIAGRAM_STROKE}
+            >
+              {s.glyph}
+            </text>
+            <text x={50} y={y + 26} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
+              {s.label}
+            </text>
+            <text x={50} y={y + 12} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+              {s.meta}
+            </text>
+            <path
+              d={`M180,${y + 23} C 192,${y + 23} 200,140 232,140`}
+              fill="none"
+              stroke={DIAGRAM_STROKE}
+              strokeWidth="1"
+              markerEnd="url(#arr-fusion)"
+              style={{ animation: `wd-fade-up 600ms ease-out ${i * 120}ms both` }}
+            />
+          </g>
+        );
+      })}
+
+      <rect x={216} y={108} width={92} height={64} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={262} y={128} textAnchor="middle" fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        CORRELATE
+      </text>
+      <text x={262} y={144} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        200 m · 60 s
+      </text>
+      <text x={262} y={160} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        cosine + space-time
+      </text>
+
+      <path
+        d="M308,140 L356,140"
+        stroke={DIAGRAM_STROKE}
+        strokeWidth="1"
+        markerEnd="url(#arr-fusion)"
+      />
+
+      <rect x={356} y={92} width={104} height={96} fill={DIAGRAM_STROKE} />
+      <text x={368} y={108} fontFamily={PX_MONO} fontSize="7" fill="#a3a3a3" letterSpacing="1.2">
+        INCIDENT · #1242
+      </text>
+      <text x={368} y={130} fontFamily={PX_MONO} fontSize="10" fill="white">
+        Possible
+      </text>
+      <text x={368} y={144} fontFamily={PX_MONO} fontSize="10" fill="white">
+        assault
+      </text>
+      <text x={368} y={166} fontFamily={PX_MONO} fontSize="8" fill="#a3a3a3">
+        Mission &amp; 16th
+      </text>
+      <rect x={368} y={172} width={28} height={10} fill="none" stroke="white" />
+      <text x={382} y={180} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill="white">
+        MED
+      </text>
+      <text x={400} y={180} fontFamily={PX_MONO} fontSize="7" fill="#a3a3a3">
+        4 signals
+      </text>
+    </svg>
+  );
+}
+
+function MemoryDiagram() {
+  const chips = [
+    { ts: "−3 d", note: "4× dismissed · bar crowd" },
+    { ts: "−7 d", note: "11 PM cluster · 16th & Valencia" },
+    { ts: "−12 d", note: "false pose: 0.71 · streetlight 14B" },
+    { ts: "−21 d", note: "confirmed assault · charged" },
+  ];
+  return (
+    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Memory diagram">
+      <ArrowDef id="arr-memory" />
+      <ZoneFrame x={4} y={4} w={144} h={272} step="01" label="review" />
+      <ZoneFrame x={160} y={4} w={172} h={272} step="02" label="gbrain" />
+      <ZoneFrame x={344} y={4} w={132} h={272} step="03" label="recall" />
+
+      <rect x={20} y={64} width={114} height={86} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={28} y={80} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        INCIDENT · #1241
+      </text>
+      <text x={28} y={100} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        dispatcher
+      </text>
+      <text x={28} y={114} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        held
+      </text>
+      <text x={28} y={134} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        reason: bar crowd
+      </text>
+      <text x={28} y={146} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        no patrol sent
+      </text>
+
+      <path
+        d="M134,108 L162,108"
+        stroke={DIAGRAM_STROKE}
+        markerEnd="url(#arr-memory)"
+      />
+      <text x={148} y={102} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+        write
+      </text>
+
+      <rect x={176} y={36} width={144} height={208} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={184} y={52} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        GBRAIN · mission/16th
+      </text>
+      <line x1={176} y1={58} x2={320} y2={58} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
+      {chips.map((c, i) => {
+        const y = 70 + i * 38;
+        const isNew = i === 0;
+        return (
+          <g key={c.ts}>
+            <rect
+              x={184}
+              y={y}
+              width={128}
+              height={28}
+              fill={isNew ? DIAGRAM_STROKE : "white"}
+              stroke={DIAGRAM_STROKE}
+            />
+            <text
+              x={190}
+              y={y + 11}
+              fontFamily={PX_MONO}
+              fontSize="7"
+              fill={isNew ? "#a3a3a3" : DIAGRAM_MUTED}
+              letterSpacing="1.2"
+            >
+              {c.ts}
+            </text>
+            <text
+              x={190}
+              y={y + 22}
+              fontFamily={PX_MONO}
+              fontSize="8"
+              fill={isNew ? "white" : DIAGRAM_STROKE}
+            >
+              {c.note}
+            </text>
+          </g>
+        );
+      })}
+
+      <path
+        d="M320,140 L362,140"
+        stroke={DIAGRAM_STROKE}
+        markerEnd="url(#arr-memory)"
+      />
+      <text x={341} y={134} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+        recall
+      </text>
+
+      <rect x={362} y={84} width={108} height={106} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={370} y={100} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        NEXT SIGNAL
+      </text>
+      <text x={370} y={120} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        CAM 14B
+      </text>
+      <text x={370} y={134} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        Mission &amp; 16th
+      </text>
+      <rect x={370} y={146} width={92} height={14} fill={DIAGRAM_STROKE} />
+      <text x={376} y={156} fontFamily={PX_MONO} fontSize="7" fill="white">
+        + 4 prior matches
+      </text>
+      <text x={370} y={176} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+        score ↓ false-positive
+      </text>
+    </svg>
+  );
+}
+
+function ConsentDiagram() {
+  const checks: { rule: string; status: "ok" | "fail" }[] = [
+    { rule: "GEOFENCE", status: "ok" },
+    { rule: "TIME WINDOW", status: "ok" },
+    { rule: "INCIDENT TYPE", status: "ok" },
+    { rule: "WARRANT", status: "fail" },
+  ];
+  return (
+    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Consent diagram">
+      <ArrowDef id="arr-consent" />
+      <ArrowDef id="arr-consent-fail" color={DIAGRAM_ACCENT} />
+      <ZoneFrame x={4} y={4} w={120} h={272} step="01" label="query" />
+      <ZoneFrame x={136} y={4} w={188} h={272} step="02" label="policy-as-code" />
+      <ZoneFrame x={336} y={4} w={140} h={272} step="03" label="audit log" />
+
+      <rect x={16} y={84} width={96} height={104} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={24} y={100} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        POLICE · SFPD
+      </text>
+      <text x={24} y={120} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
+        clip request
+      </text>
+      <text x={24} y={138} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        22:50–22:55
+      </text>
+      <text x={24} y={150} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        cam 14B
+      </text>
+      <text x={24} y={162} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        type: assault
+      </text>
+      <text x={24} y={178} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+        warrant: no
+      </text>
+
+      <path
+        d="M112,136 L150,136"
+        stroke={DIAGRAM_STROKE}
+        markerEnd="url(#arr-consent)"
+      />
+
+      <rect x={150} y={64} width={160} height={144} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={160} y={80} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        OWNER POLICY · CAM 14B
+      </text>
+      <line x1={150} y1={86} x2={310} y2={86} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
+      {checks.map((c, i) => {
+        const y = 94 + i * 22;
+        const isFail = c.status === "fail";
+        return (
+          <g key={c.rule}>
+            <text x={160} y={y + 10} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
+              {c.rule}
+            </text>
+            <rect
+              x={278}
+              y={y}
+              width={22}
+              height={14}
+              fill={isFail ? DIAGRAM_ACCENT : "white"}
+              stroke={isFail ? DIAGRAM_ACCENT : DIAGRAM_STROKE}
+            />
+            <text
+              x={289}
+              y={y + 10}
+              textAnchor="middle"
+              fontFamily={PX_MONO}
+              fontSize="9"
+              fill={isFail ? "white" : DIAGRAM_STROKE}
+            >
+              {isFail ? "✗" : "✓"}
+            </text>
+          </g>
+        );
+      })}
+
+      <path
+        d="M310,136 C 322,136 322,76 348,76"
+        fill="none"
+        stroke={DIAGRAM_STROKE}
+        strokeDasharray="2 2"
+        markerEnd="url(#arr-consent)"
+      />
+      <path
+        d="M310,136 C 322,136 322,196 348,196"
+        fill="none"
+        stroke={DIAGRAM_ACCENT}
+        markerEnd="url(#arr-consent-fail)"
+      />
+
+      <rect x={348} y={60} width={120} height={32} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={356} y={76} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
+        22:50:31 ALLOW
+      </text>
+      <text x={356} y={86} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+        clip · 5 s · cam 14B
+      </text>
+
+      <rect x={348} y={180} width={120} height={32} fill={DIAGRAM_ACCENT} />
+      <text x={356} y={196} fontFamily={PX_MONO} fontSize="9" fill="white">
+        22:50:31 DENY
+      </text>
+      <text x={356} y={206} fontFamily={PX_MONO} fontSize="7" fill="white">
+        warrant required
+      </text>
+
+      <text x={408} y={240} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        OWNER SEES BOTH
+      </text>
+    </svg>
+  );
+}
+
 function Pillars() {
   return (
-    <section id="how" className="border-b border-neutral-200 bg-neutral-50/60">
+    <section className="border-b border-neutral-200 bg-neutral-50/60">
       <div className="mx-auto max-w-6xl px-6 py-20">
         <h2 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          What's different
+          Principles
         </h2>
         <div className="mt-8 grid grid-cols-1 gap-px bg-neutral-200 md:grid-cols-3">
           <Pillar
