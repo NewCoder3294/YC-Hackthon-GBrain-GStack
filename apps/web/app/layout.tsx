@@ -4,8 +4,8 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CalTrans CCTV",
-  description: "Bay Area traffic CCTV monitoring",
+  title: "Watchdog",
+  description: "Incident fusion and CCTV monitoring",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -30,7 +30,7 @@ function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <h1 className="font-mono text-sm tracking-tight">CalTrans CCTV</h1>
+      <h1 className="font-mono text-sm font-semibold uppercase tracking-[0.2em]">Watchdog</h1>
       <label className="block">
         <span className="block text-xs uppercase tracking-wide text-neutral-500">Email</span>
         <input

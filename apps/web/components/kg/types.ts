@@ -1,4 +1,9 @@
 export type KgNodeKind =
+  | "gang"
+  | "member"
+  | "territory"
+  | "arrest"
+  | "alert"
   | "incident"
   | "pattern"
   | "baseline"
@@ -22,6 +27,11 @@ export interface KgEdge {
 }
 
 export const KIND_LABEL: Record<KgNodeKind, string> = {
+  gang: "Gang",
+  member: "Member",
+  territory: "Territory",
+  arrest: "Arrest",
+  alert: "Alert",
   incident: "Incident",
   pattern: "Pattern",
   baseline: "Baseline",
@@ -29,18 +39,30 @@ export const KIND_LABEL: Record<KgNodeKind, string> = {
   decision: "Decision",
 };
 
+// Display order in toolbar (groups: people → places → events → analysis)
 export const KIND_ORDER: KgNodeKind[] = [
+  "gang",
+  "member",
+  "territory",
+  "arrest",
   "location",
   "incident",
+  "alert",
   "decision",
   "pattern",
   "baseline",
 ];
 
+// Columnar layout. Lower = more leftward.
 export const KIND_COLUMN: Record<KgNodeKind, number> = {
-  location: 0,
-  incident: 1,
-  decision: 2,
-  pattern: 3,
-  baseline: 4,
+  gang: 0,
+  member: 1,
+  territory: 1,
+  arrest: 2,
+  location: 2,
+  incident: 3,
+  alert: 4,
+  decision: 5,
+  pattern: 6,
+  baseline: 7,
 };

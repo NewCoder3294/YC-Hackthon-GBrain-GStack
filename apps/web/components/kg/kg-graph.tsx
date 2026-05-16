@@ -109,6 +109,11 @@ function GraphInner({ nodes, edges }: Props) {
 
   const counts = useMemo(() => {
     const out = {
+      gang: 0,
+      member: 0,
+      territory: 0,
+      arrest: 0,
+      alert: 0,
       incident: 0,
       pattern: 0,
       baseline: 0,

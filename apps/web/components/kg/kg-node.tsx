@@ -5,6 +5,12 @@ import { cn } from "@/lib/utils";
 import { KIND_LABEL, type KgNode, type KgNodeKind } from "./types";
 
 const SHAPE: Record<KgNodeKind, string> = {
+  gang: "border-2 border-black bg-white",
+  member: "border-black bg-white",
+  territory: "border border-dashed border-black bg-white",
+  arrest: "border border-neutral-500 bg-neutral-50 line-through decoration-neutral-400 decoration-1",
+  alert:
+    "border-2 border-black bg-black text-white shadow-[0_0_0_4px_rgba(0,0,0,0.08)]",
   incident: "border-black bg-white",
   pattern: "border-black bg-white rounded-full px-3",
   baseline: "border-neutral-300 bg-neutral-50",

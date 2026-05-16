@@ -15,19 +15,26 @@ export interface CameraTileData {
   isActive: boolean;
 }
 
+export type CameraStatus = "idle" | "loading" | "live" | "offline";
+
 interface Props {
   camera: CameraTileData;
+  onStatusChange?: (status: CameraStatus) => void;
 }
 
 const MJPEG_REFRESH_MS = 5000;
 const HLS_LOAD_TIMEOUT_MS = 8000;
 
-export function CameraTile({ camera }: Props) {
+export function CameraTile({ camera, onStatusChange }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [inView, setInView] = useState(false);
   const [imgSrc, setImgSrc] = useState<string | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "live" | "offline">("idle");
+  const [status, setStatus] = useState<CameraStatus>("idle");
+
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [status, onStatusChange]);
 
   // Lazy-attach: only mount stream when scrolled into view
   useEffect(() => {

@@ -6,12 +6,14 @@ interface Props {
   streamUrl: string;
   intervalMs?: number;
   className?: string;
+  badgeLabel?: string;
 }
 
 export function LiveMjpeg({
   streamUrl,
   intervalMs = 2000,
   className,
+  badgeLabel = "Live",
 }: Props) {
   const [tick, setTick] = useState(0);
   const [loaded, setLoaded] = useState(false);
@@ -54,11 +56,11 @@ export function LiveMjpeg({
         }`}
       />
       <span
-        aria-label="Live feed"
+        aria-label={badgeLabel}
         className="absolute right-2 top-2 flex items-center gap-1 bg-black/80 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-white"
       >
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-        Live
+        {badgeLabel}
       </span>
     </div>
   );

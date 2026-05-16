@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CameraTile, type CameraTileData } from "./camera-tile";
+import { useCallback, useMemo, useState } from "react";
+import { CameraTile, type CameraTileData, type CameraStatus } from "./camera-tile";
 import { RouteCombobox } from "./route-combobox";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +26,25 @@ export function CameraWall({ cameras }: Props) {
   const [stream, setStream] = useState<StreamFilter>("hls");
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [hideOffline, setHideOffline] = useState(true);
+  const [offlineIds, setOfflineIds] = useState<Set<string>>(() => new Set());
+
+  const reportStatus = useCallback((id: string, status: CameraStatus) => {
+    setOfflineIds((prev) => {
+      const has = prev.has(id);
+      if (status === "offline" && !has) {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      }
+      if (status === "live" && has) {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      }
+      return prev;
+    });
+  }, []);
 
   const routes = useMemo(() => {
     const set = new Set<string>();
@@ -43,8 +62,9 @@ export function CameraWall({ cameras }: Props) {
           !q ||
           c.description.toLowerCase().includes(q) ||
           c.route.toLowerCase().includes(q),
-      );
-  }, [cameras, stream, route, query]);
+      )
+      .filter((c) => !hideOffline || !offlineIds.has(c.id));
+  }, [cameras, stream, route, query, hideOffline, offlineIds]);
 
   const visible = filtered.slice(0, visibleCount);
 
@@ -109,6 +129,20 @@ export function CameraWall({ cameras }: Props) {
           }}
         />
 
+        <button
+          onClick={() => setHideOffline((v) => !v)}
+          className={cn(
+            "flex h-7 items-center gap-1.5 border px-2 font-mono text-xs uppercase",
+            hideOffline
+              ? "border-black bg-black text-white"
+              : "border-neutral-200 bg-white text-neutral-500 hover:border-black hover:text-black",
+          )}
+          title="Hide cameras reporting no signal"
+        >
+          <span className={cn("h-1.5 w-1.5", hideOffline ? "bg-white" : "bg-neutral-300")} />
+          Hide offline
+        </button>
+
         <label className="ml-auto flex items-center gap-2">
           <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
             Search
@@ -125,13 +159,18 @@ export function CameraWall({ cameras }: Props) {
         </label>
 
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          {visible.length} / {filtered.length} shown · {cameras.length} total
+          {visible.length} / {filtered.length} shown · {offlineIds.size} offline ·{" "}
+          {cameras.length} total
         </span>
       </div>
 
       <div className={cn("grid gap-2", grid.cols)}>
         {visible.map((c) => (
-          <CameraTile key={c.id} camera={c} />
+          <CameraTile
+            key={c.id}
+            camera={c}
+            onStatusChange={(s) => reportStatus(c.id, s)}
+          />
         ))}
       </div>
 

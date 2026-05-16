@@ -16,6 +16,11 @@ interface Props {
 }
 
 const KIND_SWATCH: Record<KgNodeKind, string> = {
+  gang: "border-2 border-black bg-white",
+  member: "border-black bg-white",
+  territory: "border border-dashed border-black bg-white",
+  arrest: "border-neutral-500 bg-neutral-50",
+  alert: "border-2 border-black bg-black",
   incident: "border-black bg-white",
   pattern: "border-black bg-white rounded-full",
   baseline: "border-neutral-300 bg-neutral-50",

@@ -1,10 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getClipSignedUrl, getIncident } from "../data";
 import { ClipThumbnail } from "../clip-thumbnail";
 import { LiveMjpeg } from "../live-mjpeg";
 import { thumbnailUrl } from "../thumbnail-url";
-import { SeverityBadge } from "../severity-badge";
 import { EditIncidentForm } from "./edit-form";
 import { TagEditor } from "./tag-editor";
 
@@ -22,6 +22,15 @@ function formatDuration(seconds: number): string {
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  const incident = await getIncident(id);
+  if (!incident) return { title: "Incident not found · Watchdog" };
+  return {
+    title: `[${incident.severity.toUpperCase()}] ${incident.title} · Watchdog`,
+  };
 }
 
 export default async function IncidentDetailPage({ params }: PageProps) {
@@ -47,11 +56,19 @@ export default async function IncidentDetailPage({ params }: PageProps) {
           <h1 className="font-mono text-sm uppercase tracking-widest">
             {incident.title}
           </h1>
-          <SeverityBadge severity={incident.severity} />
         </div>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          {formatTimestamp(incident.createdAt)}
-        </span>
+        <div className="flex items-baseline gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+          {primary && (
+            <span>
+              <span className="text-neutral-300">Incident</span>{" "}
+              <span className="text-black">{formatTimestamp(primary.startedAt)}</span>
+            </span>
+          )}
+          <span>
+            <span className="text-neutral-300">Logged</span>{" "}
+            {formatTimestamp(incident.createdAt)}
+          </span>
+        </div>
       </header>
 
       <div className="grid flex-1 grid-cols-1 gap-0 lg:grid-cols-[1fr_24rem]">
@@ -82,26 +99,36 @@ export default async function IncidentDetailPage({ params }: PageProps) {
                 All clips ({incident.clips.length})
               </h2>
               <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                {incident.clips.map((c) => (
-                  <li
-                    key={c.id}
-                    className="overflow-hidden border border-neutral-200"
-                  >
-                    <ClipThumbnail path={c.thumbnailPath} aspect="video" />
-                    <div className="p-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-                      <div className="text-black">
-                        {c.camera?.route ?? "—"}{" "}
-                        {c.camera?.direction ?? ""}
+                {incident.clips.map((c) => {
+                  const isPrimary = c.id === primary?.id;
+                  return (
+                    <li
+                      key={c.id}
+                      className="overflow-hidden border border-neutral-200"
+                    >
+                      <div className="relative">
+                        <ClipThumbnail path={c.thumbnailPath} aspect="video" />
+                        {isPrimary && (
+                          <span className="absolute left-1.5 top-1.5 bg-black px-1 py-0.5 font-mono text-[9px] uppercase tracking-widest text-white">
+                            Primary
+                          </span>
+                        )}
                       </div>
-                      <div className="mt-0.5">
-                        {formatTimestamp(c.startedAt)}
+                      <div className="p-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                        <div className="text-black">
+                          {c.camera?.route ?? "—"}{" "}
+                          {c.camera?.direction ?? ""}
+                        </div>
+                        <div className="mt-0.5">
+                          {formatTimestamp(c.startedAt)}
+                        </div>
+                        <div className="mt-0.5">
+                          {formatDuration(c.durationS)}
+                        </div>
                       </div>
-                      <div className="mt-0.5">
-                        {formatDuration(c.durationS)}
-                      </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -117,14 +144,10 @@ export default async function IncidentDetailPage({ params }: PageProps) {
 
           {primary && (
             <div className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
-              <div>
-                <h2 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-                  Tags
-                </h2>
-                <p className="mt-1 font-mono text-[10px] text-neutral-300">
-                  Tags are attached to the primary clip.
-                </p>
-              </div>
+              <h2 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                Tags{" "}
+                <span className="text-neutral-300">· primary clip</span>
+              </h2>
               <TagEditor
                 incidentId={incident.id}
                 clipId={primary.id}
@@ -182,7 +205,7 @@ function ClipViewer({
             className="h-full w-full"
           />
         ) : showLiveMjpeg ? (
-          <LiveMjpeg streamUrl={liveStreamUrl!} />
+          <LiveMjpeg streamUrl={liveStreamUrl!} badgeLabel="Camera live · clip pending" />
         ) : (
           <ClipThumbnail
             path={fallbackThumbnail}
@@ -196,11 +219,13 @@ function ClipViewer({
           />
         )}
       </div>
-      <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-        <span>{cameraLabel}</span>
-        <span>
+      <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+        <span className="min-w-0 flex-1 truncate" title={cameraLabel}>
+          {cameraLabel}
+        </span>
+        <span className="shrink-0">
           {showLiveMjpeg
-            ? "Live"
+            ? "Live camera feed · clip pending"
             : `${formatTimestamp(startedAt)} · ${formatDuration(durationS)}`}
         </span>
       </div>
