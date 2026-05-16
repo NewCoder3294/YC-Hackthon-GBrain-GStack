@@ -8,10 +8,12 @@ const schema = z.object({
   CRON_SECRET: z.string().min(16).optional(),
 });
 
+const blank = (v: string | undefined) => (v && v.length > 0 ? v : undefined);
+
 export const env = schema.parse({
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  DATABASE_URL: process.env.DATABASE_URL,
-  CRON_SECRET: process.env.CRON_SECRET,
+  SUPABASE_SERVICE_ROLE_KEY: blank(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  DATABASE_URL: blank(process.env.DATABASE_URL),
+  CRON_SECRET: blank(process.env.CRON_SECRET),
 });
