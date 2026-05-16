@@ -24,8 +24,8 @@ export function nearestHotspot(lat: number, lng: number): string {
   return best.name;
 }
 
-export function matchHotspotByName(s: string): string | null {
-  const q = s.toLowerCase();
+export function matchHotspotByName(label: string): string | null {
+  const q = label.toLowerCase();
   for (const h of SF_HOTSPOTS) {
     const name = h.name.toLowerCase();
     const district = h.district.toLowerCase();
@@ -46,8 +46,10 @@ export function projectToViewport(
   const usableH = height - padding * 2;
   const tx = (lng - LNG_MIN) / (LNG_MAX - LNG_MIN || 1);
   const ty = (lat - LAT_MIN) / (LAT_MAX - LAT_MIN || 1);
+  const x = padding + tx * usableW;
+  const y = padding + (1 - ty) * usableH;
   return {
-    x: Math.round(padding + tx * usableW),
-    y: Math.round(padding + (1 - ty) * usableH),
+    x: Math.round(Math.max(padding, Math.min(width - padding, x))),
+    y: Math.round(Math.max(padding, Math.min(height - padding, y))),
   };
 }

@@ -13,9 +13,7 @@ describe("nearestHotspot", () => {
     expect(nearestHotspot(37.7335, -122.3893)).toBe("Bayview Hunters Point");
   });
   it("returns a known hotspot name for an arbitrary SF point", () => {
-    const n = nearestHotspot(37.79, -122.41);
-    expect(typeof n).toBe("string");
-    expect(n.length).toBeGreaterThan(0);
+    expect(nearestHotspot(37.79, -122.41)).toBe("Chinatown");
   });
 });
 
