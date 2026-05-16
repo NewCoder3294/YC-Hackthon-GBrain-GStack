@@ -64,6 +64,8 @@ const decideSchema = z.object({
 export async function recordDecision(input: z.infer<typeof decideSchema>) {
   const parsed = decideSchema.parse(input);
   const supabase = await createClient();
+  const decidedAt = new Date().toISOString();
+
   const { error } = await supabase
     .from("decisions")
     .upsert(
@@ -72,14 +74,122 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
         outcome: parsed.outcome,
         reason: parsed.reason,
         reviewer: parsed.reviewer,
-        decided_at: new Date().toISOString(),
+        decided_at: decidedAt,
       },
       { onConflict: "incident_id" },
     );
   if (error) throw new Error(error.message);
+
+  // Write the decision as a reviewed_incident page in the gbrain pages table
+  // so it joins the institutional memory layer that gbrain_prior_context queries
+  // against. Slug is deterministic per incident → upsert on re-decide.
+  try {
+    await writeReviewedIncidentPage(supabase, {
+      incidentId: parsed.incidentId,
+      outcome: parsed.outcome,
+      reason: parsed.reason,
+      reviewer: parsed.reviewer,
+      decidedAt,
+    });
+  } catch (e) {
+    // Don't let a gbrain write failure block the decision write — the decision
+    // is the source of truth. Just log and move on.
+    console.error(
+      "[recordDecision] gbrain page write failed:",
+      e instanceof Error ? e.message : e,
+    );
+  }
+
   revalidatePath("/kg");
   revalidatePath("/incidents");
   revalidatePath(`/incidents/${parsed.incidentId}`);
+}
+
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+
+async function writeReviewedIncidentPage(
+  supabase: SupabaseClient,
+  d: {
+    incidentId: string;
+    outcome: "act" | "hold" | "dismiss";
+    reason: string | null;
+    reviewer: string;
+    decidedAt: string;
+  },
+) {
+  // Look up incident details we need for the page (title, severity, gang).
+  const { data: inc, error: incErr } = await supabase
+    .from("incidents")
+    .select("title, severity, suspect_gang_id")
+    .eq("id", d.incidentId)
+    .single();
+  if (incErr || !inc) throw new Error(incErr?.message ?? "incident not found");
+
+  // Resolve gang name if we have one — humans + gbrain FTS prefer the name.
+  let gangName: string | null = null;
+  if (inc.suspect_gang_id) {
+    const { data: gang } = await supabase
+      .from("gangs")
+      .select("name")
+      .eq("id", inc.suspect_gang_id)
+      .maybeSingle();
+    gangName = (gang?.name as string | undefined) ?? null;
+  }
+
+  const compiledTruth = [
+    `**Dispatcher decision:** ${d.outcome}`,
+    "",
+    `**Reason:** ${d.reason && d.reason.trim().length > 0 ? d.reason : "—"}`,
+    "",
+    `**Suspect gang:** ${gangName ?? "—"}`,
+    "",
+    `**Severity:** ${inc.severity}`,
+  ].join("\n");
+
+  const slug = `reviewed_incident-${d.incidentId.replace(/-/g, "")}`;
+  const frontmatter = {
+    kind: "reviewed_incident",
+    meta: { reviewer: d.reviewer, decided_at: d.decidedAt },
+    source: "derived",
+    samples: null,
+    confidence: null,
+    created_at: d.decidedAt,
+    related_gang_id: inc.suspect_gang_id ?? null,
+    related_incident_id: d.incidentId,
+  };
+
+  const { data: page, error: pageErr } = await supabase
+    .from("pages")
+    .upsert(
+      {
+        source_id: "watchdog",
+        slug,
+        type: "reviewed_incident",
+        page_kind: "markdown",
+        title: inc.title,
+        compiled_truth: compiledTruth,
+        frontmatter,
+      },
+      { onConflict: "source_id,slug" },
+    )
+    .select("id")
+    .single();
+  if (pageErr || !page) {
+    throw new Error(pageErr?.message ?? "page upsert returned nothing");
+  }
+
+  // Refresh tags — clear existing then insert the canonical set so re-decisions
+  // don't accumulate stale tags.
+  await supabase.from("tags").delete().eq("page_id", page.id);
+  const tags = [
+    `decision:${d.outcome}`,
+    `incident:${inc.severity}`,
+    ...(inc.suspect_gang_id ? [`gang:${inc.suspect_gang_id}`] : []),
+  ];
+  const { error: tagErr } = await supabase
+    .from("tags")
+    .insert(tags.map((tag) => ({ page_id: page.id, tag })));
+  if (tagErr) throw new Error(tagErr.message);
 }
 
 const ackSchema = z.object({

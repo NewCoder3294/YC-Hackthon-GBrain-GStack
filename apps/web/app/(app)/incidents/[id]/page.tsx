@@ -7,6 +7,7 @@ import { LiveMjpeg } from "../live-mjpeg";
 import { thumbnailUrl } from "../thumbnail-url";
 import { EditIncidentForm } from "./edit-form";
 import { TagEditor } from "./tag-editor";
+import { PriorContext } from "./prior-context";
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -167,6 +168,8 @@ export default async function IncidentDetailPage({ params }: PageProps) {
               </a>
             </div>
           )}
+
+          <PriorContext incidentId={incident.id} />
         </aside>
       </div>
     </section>
