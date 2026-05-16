@@ -59,10 +59,10 @@ const configSchema = z.object({
   LLM_MAX_CALLS_PER_HOUR: z.coerce.number().int().min(0).default(30),
   /** Per-tick cap. Keeps a single misbehaving tick from spending a budget. */
   LLM_MAX_CALLS_PER_TICK: z.coerce.number().int().min(0).default(5),
-  /** Min cluster size to qualify for LLM enrichment. Raises bar above fusion's min. */
-  ENRICH_MIN_MEMBERS: z.coerce.number().int().min(1).default(3),
+  /** Min cluster size to qualify for LLM enrichment. Higher = fewer fires, each one Claude-described. */
+  ENRICH_MIN_MEMBERS: z.coerce.number().int().min(1).default(5),
   /** Min max-confidence in a cluster to qualify. Filters obvious false positives. */
-  ENRICH_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.4),
+  ENRICH_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.6),
 });
 
 export type WorkerConfig = z.infer<typeof configSchema>;

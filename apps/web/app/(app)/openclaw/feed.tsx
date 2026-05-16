@@ -104,15 +104,20 @@ interface Props {
 export function OpenclawFeed({ cards }: Props) {
   const [severity, setSeverity] = useState<SeverityFilter>("all");
   const [decision, setDecision] = useState<DecisionFilter>("all");
-  const [enrichedOnly, setEnrichedOnly] = useState(false);
+  /**
+   * Default: only show cards that have a Claude-generated narrative.
+   * "Fused incident — N signals" stubs from before LLM mode was wired
+   * are noise — toggle to surface them if needed.
+   */
+  const [showRaw, setShowRaw] = useState(false);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return cards.filter((c) => {
+      if (!showRaw && !c.narrative) return false;
       if (severity !== "all" && c.severity !== severity) return false;
       if (decision !== "all" && c.decisionHint !== decision) return false;
-      if (enrichedOnly && !c.enriched) return false;
       if (!q) return true;
       return (
         c.title.toLowerCase().includes(q) ||
@@ -120,7 +125,12 @@ export function OpenclawFeed({ cards }: Props) {
         c.tags.some((t) => t.toLowerCase().includes(q))
       );
     });
-  }, [cards, severity, decision, enrichedOnly, query]);
+  }, [cards, severity, decision, showRaw, query]);
+
+  const rawHiddenCount = useMemo(
+    () => (showRaw ? 0 : cards.filter((c) => !c.narrative).length),
+    [cards, showRaw],
+  );
 
   const groups = useMemo(() => {
     const map = new Map<"now" | "hour" | "today" | "older", ActivityCard[]>();
@@ -153,21 +163,29 @@ export function OpenclawFeed({ cards }: Props) {
         />
         <div className="h-4 w-px bg-neutral-200" />
         <button
-          onClick={() => setEnrichedOnly((v) => !v)}
+          onClick={() => setShowRaw((v) => !v)}
           className={cn(
             "flex h-7 items-center gap-1.5 border px-2 font-mono text-[10px] uppercase tracking-widest",
-            enrichedOnly
+            showRaw
               ? "border-black bg-black text-white"
               : "border-neutral-200 bg-white text-neutral-500 hover:border-black hover:text-black",
           )}
+          title={
+            showRaw
+              ? "Hide cards with no Claude description"
+              : "Show pre-Claude raw cards too"
+          }
         >
           <span
             className={cn(
               "h-1.5 w-1.5",
-              enrichedOnly ? "bg-white" : "bg-neutral-300",
+              showRaw ? "bg-white" : "bg-neutral-300",
             )}
           />
-          Claude only
+          Show raw
+          {rawHiddenCount > 0 && (
+            <span className="text-neutral-400">· {rawHiddenCount} hidden</span>
+          )}
         </button>
         <label className="ml-auto flex items-center gap-2">
           <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
