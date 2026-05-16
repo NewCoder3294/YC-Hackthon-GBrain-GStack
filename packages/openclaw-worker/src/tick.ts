@@ -333,8 +333,8 @@ async function emitFusionIncident(
   await putIntelNotePage({
     noteId: cluster.fusionKey,
     title: enriched
-      ? `OpenClaw 🤖 ${enriched.title}`
-      : `OpenClaw fusion · ${cluster.members.length} signals`,
+      ? enriched.title
+      : `${cluster.members.length} signals · ${cluster.centroidLat.toFixed(3)}, ${cluster.centroidLng.toFixed(3)}`,
     body: notes,
     tags: [
       "fusion:auto",

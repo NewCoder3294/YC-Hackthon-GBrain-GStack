@@ -166,7 +166,9 @@ async function loadActivity(): Promise<{
       key: p.slug,
       ts: p.updated_at ?? p.created_at,
       incidentId: relIncId,
-      title: enriched ? p.title.replace(/^OpenClaw 🤖 /, "") : (incident?.title ?? p.title),
+      title: enriched
+      ? p.title.replace(/^OpenClaw 🤖 /, "") // legacy stripper
+      : incident?.title ?? p.title,
       narrative,
       decisionHint,
       enriched,

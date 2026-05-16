@@ -56,13 +56,13 @@ const configSchema = z.object({
   /** Default: haiku — fast + cheap, fine for structured extraction. */
   LLM_MODEL: z.string().default("claude-haiku-4-5"),
   /** Hard cap. Worker idles on enrichment once breached this hour. */
-  LLM_MAX_CALLS_PER_HOUR: z.coerce.number().int().min(0).default(30),
-  /** Per-tick cap. Keeps a single misbehaving tick from spending a budget. */
-  LLM_MAX_CALLS_PER_TICK: z.coerce.number().int().min(0).default(5),
-  /** Min cluster size to qualify for LLM enrichment. Higher = fewer fires, each one Claude-described. */
-  ENRICH_MIN_MEMBERS: z.coerce.number().int().min(1).default(5),
+  LLM_MAX_CALLS_PER_HOUR: z.coerce.number().int().min(0).default(60),
+  /** Per-tick cap. Worker aims for ~3-5 flagged incidents per 5-min tick. */
+  LLM_MAX_CALLS_PER_TICK: z.coerce.number().int().min(0).default(6),
+  /** Min cluster size to qualify. Target: ~3 incidents per 5-min tick. */
+  ENRICH_MIN_MEMBERS: z.coerce.number().int().min(1).default(3),
   /** Min max-confidence in a cluster to qualify. Filters obvious false positives. */
-  ENRICH_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.6),
+  ENRICH_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.5),
 });
 
 export type WorkerConfig = z.infer<typeof configSchema>;

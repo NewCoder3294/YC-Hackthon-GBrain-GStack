@@ -75,9 +75,9 @@ export function rankAndFilter(clusters: FusionCluster[]): RankedCluster[] {
     if (distinctSourceIds === 1 && distinctSourceTypes === 1) {
       // Single source flapping — usually noise. But sustained high-confidence
       // detection at one camera IS interesting (sustained traffic, ongoing
-      // activity at a corner). Let those through with a tighter bar.
+      // activity at a corner). Let those through.
       const sustainedHighConf =
-        c.members.length >= 7 && maxConf >= 0.8;
+        c.members.length >= 5 && maxConf >= 0.7;
       if (!sustainedHighConf) continue;
     }
 
