@@ -471,8 +471,7 @@ export function SFMap({ cameras }: Props) {
         </button>
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           {filteredCams.length} cams · {wdIncidents.length} incidents ·{" "}
-          {filteredDispatch.length}/{dispatch.calls.length} dispatch ·{" "}
-          {dispatch.fileCount} audio
+          {filteredDispatch.length}/{dispatch.calls.length} dispatch
           {dispatch.loading ? " (loading)" : ""}
           {dispatch.error ? ` · ${dispatch.error}` : ""}
         </span>

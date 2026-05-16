@@ -217,17 +217,6 @@ export function DispatchPanel({ call, onClose }: Props) {
           </dl>
         </section>
 
-        {call.generated && (
-          <section className="border-b border-neutral-200 px-3 py-3">
-            <p className="font-mono text-[10px] leading-snug text-neutral-500">
-              <strong className="font-semibold text-neutral-700">Note:</strong>{" "}
-              metadata (call type, priority, address) is generated for this
-              audio file. The audio itself is real SFPD scanner traffic from
-              openmhz.com. Add a <code>manifest.json</code> in{" "}
-              <code>/public/dispatch-audio/</code> to override per-file.
-            </p>
-          </section>
-        )}
       </div>
     </aside>
   );
