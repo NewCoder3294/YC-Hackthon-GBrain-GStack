@@ -19,6 +19,7 @@ export interface KgNode {
   sub?: string;
   meta?: Record<string, string | number>;
   source?: "live" | "fixture";
+  neighborhood?: string; // derived server-side in data.ts
 }
 
 export interface KgEdge {
@@ -74,3 +75,34 @@ export const KIND_COLUMN: Record<KgNodeKind, number> = {
   pattern: 6,
   baseline: 7,
 };
+
+// --- Overview/Detail redesign types ---
+
+/** A neighborhood cluster bubble in the Tier-1 overview. */
+export interface NeighborhoodCluster {
+  neighborhood: string;
+  nodeIds: string[];
+  incidentCount: number;
+  alertCount: number; // unacknowledged
+  maxSeverity: number;
+}
+
+/** Aggregated arc between two neighborhood clusters. */
+export interface ClusterEdge {
+  id: string;
+  a: string;
+  b: string;
+  weight: number;
+}
+
+/** Collapsed "+N <kind> ⊕" stub in the Tier-2 detail view. */
+export interface StubNode {
+  id: string;
+  neighborhood: string;
+  kind: KgNodeKind;
+  count: number;
+}
+
+export type KgView =
+  | { mode: "overview" }
+  | { mode: "detail"; neighborhood: string };
