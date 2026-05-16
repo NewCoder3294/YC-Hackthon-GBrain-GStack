@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCalTransResponse } from "./caltrans.js";
+import { parseCalTransResponse } from "./caltrans";
 
 const fixture = {
   data: [

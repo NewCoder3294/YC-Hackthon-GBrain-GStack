@@ -1,6 +1,6 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import * as schema from "./schema.js";
+import * as schema from "./schema";
 
 export function createDb(connectionString: string) {
   const queryClient = postgres(connectionString, { prepare: false });

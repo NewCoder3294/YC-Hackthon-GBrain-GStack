@@ -1,2 +1,2 @@
-export * from "./caltrans.js";
-export * from "./sync.js";
+export * from "./caltrans";
+export * from "./sync";

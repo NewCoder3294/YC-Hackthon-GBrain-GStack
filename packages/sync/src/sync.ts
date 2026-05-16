@@ -1,6 +1,6 @@
 import { cameras, type Db } from "@caltrans/db";
 import { sql } from "drizzle-orm";
-import { parseCalTransResponse } from "./caltrans.js";
+import { parseCalTransResponse } from "./caltrans";
 
 export const CALTRANS_D4_URL =
   "https://cwwp2.dot.ca.gov/data/d4/cctv/cctvStatusD04.json";

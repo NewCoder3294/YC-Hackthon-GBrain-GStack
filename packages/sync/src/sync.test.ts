@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { syncCameras } from "./sync.js";
+import { syncCameras } from "./sync";
 import type { NewCamera } from "@caltrans/db";
 
 const sample: NewCamera = {
