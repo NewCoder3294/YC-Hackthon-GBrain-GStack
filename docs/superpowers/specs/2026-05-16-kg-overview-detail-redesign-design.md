@@ -47,19 +47,32 @@ A geographic map of SF neighborhood cluster bubbles.
   `SF_HOTSPOTS` (20 neighborhoods: `name`, `district`, `lat`, `lng`,
   `weight`). This is the canonical source — no new taxonomy invented, no
   dependency on the ingestion free-string neighborhood field.
-- **Node → neighborhood resolver** (`neighborhoodForNode`), priority chain:
-  1. `incident` → camera location lat/lng → nearest hotspot centroid.
-  2. `territory` → `center_lat/center_lng` → nearest hotspot.
-  3. `gang` → modal neighborhood of its territories.
-  4. `member` → its gang's neighborhood, else `last_seen_location` → nearest.
+- **Node → neighborhood resolver** (`resolveNeighborhood`). Note: incidents
+  carry **no coordinates** (camera = `{route, direction, description}`
+  only). The coordinate bridges are `territories.center_lat/lng` and
+  `gang_events.lat/lng` (the latter also carries `related_incident_id`).
+  Priority chain:
+  1. `territory` → `center_lat/center_lng` → `nearestHotspot`.
+  2. `event` (gang_event) → its `lat/lng` → `nearestHotspot`; else its
+     gang's neighborhood.
+  3. `gang` → modal neighborhood across its territories.
+  4. `member` → its gang's neighborhood.
   5. `arrest` → its member's neighborhood.
-  6. `alert` / `decision` → its related incident's neighborhood.
-  7. `baseline` / `pattern` (GBrain) → the page's DataSF neighborhood string,
-     matched to a hotspot by case-insensitive name/slug; else nearest by any
-     related entity.
-  8. `dispatch` / `event` → location → nearest hotspot.
-  9. Fallback: nearest centroid to any known coordinate, else `Unmapped`
-     (rendered as a single off-map bucket bubble, never hidden silently).
+  6. `incident` → the neighborhood of a `gang_event` whose
+     `related_incident_id` matches; else `suspect_gang_id`'s neighborhood;
+     else camera `route`/`description` string-matched to a hotspot name;
+     else `Unmapped`.
+  7. `alert` → related incident's neighborhood; else affected/triggering
+     gang; else territory.
+  8. `decision` → its incident's neighborhood.
+  9. `baseline` / `pattern` (GBrain) → frontmatter `related_incident_id` /
+     `related_gang_id` → that entity's neighborhood; else the page's
+     neighborhood string matched to a hotspot by case-insensitive
+     name/slug; else `Unmapped`.
+  10. `dispatch` → camera/route string-matched to a hotspot; else
+      `Unmapped`.
+  11. Fallback: `Unmapped` — a single off-map bucket bubble, never hidden
+      silently.
 - **Projection:** `projectToViewport(lat, lng)` — linear projection of the
   SF bounding box (derived from `SF_HOTSPOTS` min/max) into the React Flow
   coordinate space. Computed once, O(n). A faint static SF landmass path is
@@ -122,7 +135,7 @@ small, single-purpose files):
 
 | File | Responsibility | Kind |
 |---|---|---|
-| `apps/web/lib/kg/neighborhoods.ts` | `SF_HOTSPOTS`-backed taxonomy, `neighborhoodForNode()`, `projectToViewport()`, `nearestHotspot()` | New, pure |
+| `apps/web/lib/kg/neighborhoods.ts` | `SF_HOTSPOTS`-backed taxonomy, `resolveNeighborhood()`, `buildNeighborhoodContext()`, `projectToViewport()`, `nearestHotspot()`, `matchHotspotByName()` | New, pure |
 | `apps/web/lib/kg/aggregate.ts` | `buildOverview(nodes,edges)` → clusters + inter-cluster edges; `buildDetail(neighborhood,nodes,edges)` → spine + `+N` stubs | New, pure |
 | `apps/web/components/kg/overview-map.tsx` | Tier-1 React Flow surface: fixed projected positions, neighborhood nodes, weighted arcs, gang-lens highlight | New |
 | `apps/web/components/kg/neighborhood-detail.tsx` | Tier-2: bounded subgraph, deterministic radial, stub/node expansion | New |
@@ -154,19 +167,17 @@ filters move into the detail view. `realtime-refresh.tsx` — reworked from a
 ## Testing (TDD — tests written first, per project rules)
 
 - **Unit (pure, target 80%+):**
-  - `neighborhoodForNode` — each priority-chain branch + `Unmapped` fallback.
+  - `resolveNeighborhood` — each priority-chain branch + `Unmapped` fallback.
   - `nearestHotspot` / `projectToViewport` — known coordinates map to the
     expected hotspot and stay within the viewport box; projection is stable.
   - `buildOverview` — neighborhood counts, severity rollup, `⚑` alert count,
     inter-cluster edge generation and the min-count threshold.
   - `buildDetail` — spine selection, `+N` stub thresholds, expand semantics.
-- **Interaction:**
-  - Overview renders the deterministic bubble set; positions are byte-stable
-    across re-render.
-  - Clicking a bubble drills in; breadcrumb returns to overview.
-  - Gang lens highlights/dims without moving any node.
-  - A simulated realtime delta updates a neighborhood count while every
-    bubble position remains unchanged.
+- **Interaction (manual — web vitest env is `node`-only, React Flow is not
+  testable here):** documented checklist run against `localhost:3000/kg`:
+  overview renders the deterministic bubble set; clicking a bubble drills
+  in; breadcrumb returns; gang lens highlights/dims without moving any
+  node; a live DB change updates a count without reshuffling positions.
 
 ## Scope
 
