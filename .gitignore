@@ -8,3 +8,4 @@ dist
 *.log
 coverage
 .vercel
+*.tsbuildinfo
