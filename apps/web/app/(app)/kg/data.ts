@@ -68,9 +68,27 @@ interface DecisionRow {
   decided_at: string;
 }
 
-interface GbrainRecordRow {
+interface GbrainPageRow {
+  id: number;
+  slug: string;
+  type: string;
+  title: string;
+  compiled_truth: string;
+  frontmatter: {
+    legacy_id?: string | null;
+    related_incident_id?: string | null;
+    related_gang_id?: string | null;
+    confidence?: number | string | null;
+    samples?: number | null;
+    source?: string | null;
+  } | null;
+  updated_at: string;
+  tags: { tag: string }[] | null;
+}
+
+interface GbrainRecordView {
   id: string;
-  kind: "pattern" | "baseline" | "reviewed_incident" | "intel_note";
+  kind: string;
   title: string;
   body: string;
   tags: string[];
@@ -79,7 +97,6 @@ interface GbrainRecordRow {
   confidence: number | string | null;
   samples: number | null;
   source: string;
-  created_at: string;
 }
 
 interface GangEventRow {
@@ -183,11 +200,12 @@ export async function loadKgFromSupabase(): Promise<{
       .select("id, incident_id, outcome, reason, reviewer, decided_at")
       .order("decided_at", { ascending: false }),
     supabase
-      .from("gbrain_records")
+      .from("pages")
       .select(
-        "id, kind, title, body, tags, related_incident_id, related_gang_id, confidence, samples, source, created_at",
+        "id, slug, type, title, compiled_truth, frontmatter, updated_at, tags ( tag )",
       )
-      .order("created_at", { ascending: false })
+      .eq("source_id", "watchdog")
+      .order("updated_at", { ascending: false })
       .limit(80),
     supabase
       .from("gang_events")
@@ -209,7 +227,23 @@ export async function loadKgFromSupabase(): Promise<{
   const alerts = (alertsRes.data ?? []) as AlertRow[];
   const incidents = (incidentsRes.data ?? []) as unknown as IncidentRow[];
   const decisions = (decisionsRes.data ?? []) as DecisionRow[];
-  const gbrainRecords = (gbrainRes.data ?? []) as GbrainRecordRow[];
+  const gbrainPages = (gbrainRes.data ?? []) as GbrainPageRow[];
+  const gbrainRecords: GbrainRecordView[] = gbrainPages.map((p) => {
+    const fm = p.frontmatter ?? {};
+    const legacyId = typeof fm.legacy_id === "string" && fm.legacy_id ? fm.legacy_id : String(p.id);
+    return {
+      id: legacyId,
+      kind: p.type,
+      title: p.title,
+      body: p.compiled_truth,
+      tags: (p.tags ?? []).map((t) => t.tag),
+      related_incident_id: fm.related_incident_id ?? null,
+      related_gang_id: fm.related_gang_id ?? null,
+      confidence: fm.confidence ?? null,
+      samples: fm.samples ?? null,
+      source: fm.source ?? "gbrain",
+    };
+  });
   const events = (eventsRes.data ?? []) as GangEventRow[];
 
   const nodes: KgNode[] = [];

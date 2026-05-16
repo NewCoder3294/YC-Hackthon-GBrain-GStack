@@ -18,6 +18,7 @@ import "@xyflow/react/dist/style.css";
 import { KgFlowNode, type KgNodeData } from "./kg-node";
 import { KgToolbar } from "./kg-toolbar";
 import { KgInspector, type Neighbor } from "./kg-inspector";
+import { GbrainQueryPanel } from "./gbrain-query-panel";
 import {
   KIND_ORDER,
   type KgEdge,
@@ -508,6 +509,8 @@ function GraphInner({ nodes, edges }: Props) {
           tracing={tracing}
         />
       )}
+
+      {!selectedNode && <GbrainQueryPanel onFocusGbrainId={(id) => focusOnNode(id)} />}
 
       {KIND_ORDER.length === 0 && null}
     </div>

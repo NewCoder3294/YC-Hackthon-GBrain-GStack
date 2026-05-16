@@ -4,6 +4,56 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
+export interface GbrainSearchHit {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  tags: string[];
+  related_incident_id: string | null;
+  related_gang_id: string | null;
+  confidence: number | null;
+  samples: number | null;
+  rank: number;
+}
+
+const searchSchema = z.object({
+  q: z.string().min(1).max(400),
+  limit: z.number().int().min(1).max(40).optional(),
+});
+
+export async function searchGbrain(
+  input: z.infer<typeof searchSchema>,
+): Promise<GbrainSearchHit[]> {
+  const parsed = searchSchema.parse(input);
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("gbrain_search", {
+    q: parsed.q,
+    match_limit: parsed.limit ?? 12,
+    kinds: null,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GbrainSearchHit[];
+}
+
+const priorSchema = z.object({
+  incidentId: z.string().uuid(),
+  limit: z.number().int().min(1).max(20).optional(),
+});
+
+export async function gbrainPriorContext(
+  input: z.infer<typeof priorSchema>,
+): Promise<GbrainSearchHit[]> {
+  const parsed = priorSchema.parse(input);
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("gbrain_prior_context", {
+    incident_uuid: parsed.incidentId,
+    match_limit: parsed.limit ?? 8,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as GbrainSearchHit[];
+}
+
 const decideSchema = z.object({
   incidentId: z.string().uuid(),
   outcome: z.enum(["act", "hold", "dismiss"]),
@@ -58,15 +108,35 @@ const noteSchema = z.object({
 export async function writeIntelNote(input: z.infer<typeof noteSchema>) {
   const parsed = noteSchema.parse(input);
   const supabase = await createClient();
-  const { error } = await supabase.from("gbrain_records").insert({
-    kind: "intel_note",
-    title: parsed.title,
-    body: parsed.body,
-    tags: parsed.tags,
-    related_incident_id: parsed.relatedIncidentId,
-    related_gang_id: parsed.relatedGangId,
-    source: "manual",
-  });
-  if (error) throw new Error(error.message);
+  const slug =
+    "intel_note-" +
+    Date.now().toString(36) +
+    "-" +
+    Math.random().toString(36).slice(2, 8);
+  const { data: page, error: pageErr } = await supabase
+    .from("pages")
+    .insert({
+      source_id: "watchdog",
+      slug,
+      type: "intel_note",
+      page_kind: "markdown",
+      title: parsed.title,
+      compiled_truth: parsed.body,
+      frontmatter: {
+        kind: "intel_note",
+        related_incident_id: parsed.relatedIncidentId,
+        related_gang_id: parsed.relatedGangId,
+        source: "manual",
+      },
+    })
+    .select("id")
+    .single();
+  if (pageErr) throw new Error(pageErr.message);
+  if (parsed.tags.length > 0 && page) {
+    const { error: tagErr } = await supabase
+      .from("tags")
+      .insert(parsed.tags.map((tag) => ({ page_id: page.id, tag })));
+    if (tagErr) throw new Error(tagErr.message);
+  }
   revalidatePath("/kg");
 }

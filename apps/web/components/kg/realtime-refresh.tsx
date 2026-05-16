@@ -12,7 +12,7 @@ const WATCHED_TABLES = [
   "incidents",
   "predictive_alerts",
   "decisions",
-  "gbrain_records",
+  "pages",
   "gang_events",
 ] as const;
 
