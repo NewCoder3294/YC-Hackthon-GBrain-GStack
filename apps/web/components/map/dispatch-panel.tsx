@@ -88,7 +88,9 @@ export function DispatchPanel({ call, onClose }: Props) {
             </p>
           </div>
           <p className="mt-1 font-mono text-[10px] text-neutral-500">
-            {call.talkgroup} · {relativeTime(call.receivedAt)} · {call.lat.toFixed(4)},{" "}
+            {call.talkgroup}
+            {call.talkgroupId ? ` (TG ${call.talkgroupId})` : ""} ·{" "}
+            {relativeTime(call.receivedAt)} · {call.lat.toFixed(4)},{" "}
             {call.lng.toFixed(4)}
           </p>
         </div>
@@ -185,9 +187,29 @@ export function DispatchPanel({ call, onClose }: Props) {
             <dt className="text-neutral-500">District</dt>
             <dd className="text-black">{call.district}</dd>
             <dt className="text-neutral-500">Talkgroup</dt>
-            <dd className="text-black">{call.talkgroup}</dd>
+            <dd className="text-black">
+              {call.talkgroup}
+              {call.talkgroupId && (
+                <span className="ml-1 text-neutral-500">· TG {call.talkgroupId}</span>
+              )}
+            </dd>
             <dt className="text-neutral-500">Received</dt>
-            <dd className="text-black">{formatTime(call.receivedAt)}</dd>
+            <dd className="text-black">
+              {formatTime(call.receivedAt)} · simulated
+            </dd>
+            {call.recordedAt && (
+              <>
+                <dt className="text-neutral-500">Recorded</dt>
+                <dd className="text-black" title={call.recordedAt}>
+                  {new Date(call.recordedAt).toLocaleString([], {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </dd>
+              </>
+            )}
             <dt className="text-neutral-500">Source</dt>
             <dd className="text-black truncate" title={call.fileName}>
               {call.fileName}

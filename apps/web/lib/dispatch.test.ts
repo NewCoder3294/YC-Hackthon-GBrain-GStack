@@ -7,6 +7,7 @@ import {
   nextDispatchCall,
   shuffleInPlace,
 } from "./dispatch-simulator";
+import { mergeFilenameMeta, parseOpenMhzFilename } from "./dispatch-filename";
 import type { AudioFile } from "./dispatch";
 
 const SAMPLE_FILES: AudioFile[] = Array.from({ length: 8 }, (_, i) => ({
@@ -140,5 +141,76 @@ describe("nextDispatchCall", () => {
   it("throws on empty deck", () => {
     const state = createSimulatorState([], { seed: 1 });
     expect(() => nextDispatchCall(state)).toThrow(/empty deck/);
+  });
+
+  it("uses filename-derived talkgroup + recordedAt for OpenMHz-named files", () => {
+    const files: AudioFile[] = [
+      {
+        file: "sfp25-812-1778753073.m4a",
+        audioUrl: "/dispatch-audio/sfp25-812-1778753073.m4a",
+        meta: {
+          file: "sfp25-812-1778753073.m4a",
+          talkgroup: "SFPD Co. C (Bayview)",
+          talkgroupId: "812",
+          recordedAt: "2026-05-14T13:24:33.000Z",
+        },
+      },
+    ];
+    const state = createSimulatorState(files, { seed: 1 });
+    const call = nextDispatchCall(state);
+    expect(call.talkgroupId).toBe("812");
+    expect(call.talkgroup).toMatch(/SFPD Co\. C/);
+    expect(call.recordedAt).toBe("2026-05-14T13:24:33.000Z");
+  });
+});
+
+describe("parseOpenMhzFilename", () => {
+  it("extracts talkgroup and timestamp from OpenMHz captured names", () => {
+    const r = parseOpenMhzFilename("sfp25-812-1778753073.m4a");
+    expect(r).not.toBeNull();
+    expect(r!.talkgroupId).toBe("812");
+    expect(r!.talkgroupName).toMatch(/Bayview/);
+    expect(new Date(r!.recordedAt).getTime()).toBe(1778753073 * 1000);
+  });
+
+  it("supports mp3 / wav / ogg / aac", () => {
+    expect(parseOpenMhzFilename("sfp25-804-1778752999.mp3")?.talkgroupId).toBe("804");
+    expect(parseOpenMhzFilename("sfp25-804-1778752999.wav")?.talkgroupId).toBe("804");
+    expect(parseOpenMhzFilename("sfp25-804-1778752999.ogg")?.talkgroupId).toBe("804");
+    expect(parseOpenMhzFilename("sfp25-804-1778752999.aac")?.talkgroupId).toBe("804");
+  });
+
+  it("returns null for non-OpenMHz names", () => {
+    expect(parseOpenMhzFilename("random.m4a")).toBeNull();
+    expect(parseOpenMhzFilename("hello.txt")).toBeNull();
+    expect(parseOpenMhzFilename("sfp25-only.m4a")).toBeNull();
+  });
+
+  it("falls back to generic 'Talkgroup N' for unknown talkgroup ids", () => {
+    const r = parseOpenMhzFilename("sfp25-9999-1778753073.m4a");
+    expect(r?.talkgroupName).toBe("Talkgroup 9999");
+  });
+});
+
+describe("mergeFilenameMeta", () => {
+  it("manifest entry wins over filename when both present", () => {
+    const merged = mergeFilenameMeta(
+      { file: "sfp25-812-1778753073.m4a", talkgroup: "Custom name" },
+      "sfp25-812-1778753073.m4a",
+    );
+    expect(merged?.talkgroup).toBe("Custom name");
+    // Filename still fills the gaps (talkgroupId, recordedAt).
+    expect(merged?.talkgroupId).toBe("812");
+    expect(merged?.recordedAt).toBeDefined();
+  });
+
+  it("filename creates entry when no manifest", () => {
+    const merged = mergeFilenameMeta(null, "sfp25-812-1778753073.m4a");
+    expect(merged).not.toBeNull();
+    expect(merged?.talkgroupId).toBe("812");
+  });
+
+  it("returns null for unrecognized name with no manifest", () => {
+    expect(mergeFilenameMeta(null, "random.m4a")).toBeNull();
   });
 });

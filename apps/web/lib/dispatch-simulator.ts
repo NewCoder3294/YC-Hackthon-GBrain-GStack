@@ -126,12 +126,15 @@ export function nextDispatchCall(state: SimulatorState): DispatchCall {
   const talkgroup = meta?.talkgroup ?? pickTalkgroup(state.rnd);
   const callNumber = meta?.callNumber ?? generateCallNumber(state.rnd);
   const receivedAt = meta?.time ?? new Date().toISOString();
+  const recordedAt = meta?.recordedAt ?? null;
+  const talkgroupId = meta?.talkgroupId ?? null;
 
   return {
     id: `sim:${file.file}:${Date.now()}:${Math.floor(state.rnd() * 1e6)}`,
     audioUrl: file.audioUrl,
     callNumber,
     receivedAt,
+    recordedAt,
     callType: callTypeDesc,
     callTypeCode,
     priority,
@@ -140,10 +143,13 @@ export function nextDispatchCall(state: SimulatorState): DispatchCall {
     district,
     agency: "Police",
     talkgroup,
+    talkgroupId,
     lat,
     lng,
     fileName: file.file,
-    generated: !meta,
+    // "generated" means we made everything up; if filename gave us real
+    // talkgroup/recorded time, only the call-type metadata is synthetic.
+    generated: !meta || meta.callType === undefined,
   };
 }
 

@@ -2,6 +2,7 @@ import "server-only";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { manifestEntrySchema, type AudioFile, type ManifestEntry } from "./dispatch";
+import { mergeFilenameMeta } from "./dispatch-filename";
 
 const AUDIO_EXTENSIONS = new Set([".m4a", ".mp3", ".wav", ".ogg", ".aac"]);
 const PUBLIC_RELATIVE = "public/dispatch-audio";
@@ -26,7 +27,9 @@ export async function scanDispatchAudio(): Promise<AudioFile[]> {
     .map((file) => ({
       file,
       audioUrl: `/dispatch-audio/${encodeURIComponent(file)}`,
-      meta: manifestByFile.get(file) ?? null,
+      // Explicit manifest wins; filename metadata fills gaps automatically
+      // for OpenMHz-style names like `sfp25-{tg}-{epoch}.m4a`.
+      meta: mergeFilenameMeta(manifestByFile.get(file) ?? null, file),
     }));
 }
 
