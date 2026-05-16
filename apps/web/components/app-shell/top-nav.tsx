@@ -2,6 +2,7 @@ import type { Route } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { NavLink } from "./nav-link";
+import { ThemeToggle } from "./theme-toggle";
 
 export function TopNav() {
   return (
@@ -34,6 +35,7 @@ export function TopNav() {
           <NavLink href={"/openclaw" as Route} label="OpenClaw" />
         </nav>
       </div>
+      <ThemeToggle />
     </header>
   );
 }

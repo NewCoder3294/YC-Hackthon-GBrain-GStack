@@ -33,6 +33,25 @@ body {
   color: var(--color-background);
 }
 
+/*
+ * Hidden dark mode. Pure B/W UI means we can flip everything with a single
+ * CSS filter — no per-component dark variants. Media gets double-inverted
+ * so cameras / images stay correct. Toggle is the tiny dot in TopNav;
+ * state persists in localStorage. An inline pre-paint script in layout.tsx
+ * applies the class before first render so there's no white flash.
+ */
+html.dark {
+  filter: invert(1) hue-rotate(180deg);
+  background: #000;
+}
+html.dark img,
+html.dark video,
+html.dark iframe,
+html.dark canvas,
+html.dark [data-no-invert] {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 @keyframes wd-scan {
   0% { transform: translateY(-10%); opacity: 0; }
   10% { opacity: 0.5; }
