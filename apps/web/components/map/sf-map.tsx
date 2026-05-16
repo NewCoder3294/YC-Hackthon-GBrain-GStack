@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl, { type Map as MlMap, type GeoJSONSource } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { CameraTileData } from "@/components/cameras/camera-tile";
 import { CameraTile } from "@/components/cameras/camera-tile";
 import { IncidentPanel } from "./incident-panel";
 import { DispatchPanel } from "./dispatch-panel";
+import { EventFeed } from "./event-feed";
+import { useEventStream } from "@/hooks/use-event-stream";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
 import { isHighPriority, type DispatchCall } from "@/lib/dispatch";
 import { useDispatchSimulation } from "@/hooks/use-dispatch-simulation";
@@ -108,6 +110,13 @@ export function SFMap({ cameras }: Props) {
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchCall | null>(null);
 
   const dispatch = useDispatchSimulation();
+  const eventStream = useEventStream(dispatch.calls);
+
+  const locateOnMap = useCallback((lat: number, lng: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    map.easeTo({ center: [lng, lat], zoom: 14.5 });
+  }, []);
   const filteredDispatch = useMemo(
     () => dispatch.calls.filter((c) => callMatchesPriority(c, dispatchPriority)),
     [dispatch.calls, dispatchPriority],
@@ -536,6 +545,16 @@ export function SFMap({ cameras }: Props) {
           onClose={() => setSelectedDispatch(null)}
         />
       )}
+
+      <EventFeed
+        events={eventStream.events}
+        officers={eventStream.officers}
+        onCancel={eventStream.cancel}
+        onReassign={eventStream.reassign}
+        onDispatchNow={eventStream.dispatchNow}
+        onLocate={locateOnMap}
+      />
+
 
       <style jsx global>{`
         .wd-incident-marker {
