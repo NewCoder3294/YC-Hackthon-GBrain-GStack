@@ -175,7 +175,7 @@ async function loadActivity(): Promise<{
   cards.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
 
   return {
-    cards: cards.slice(0, 50),
+    cards: cards.slice(0, 25),
     pageCount: pages.length,
     incidentCount: incidentMap.size,
     enrichedCount,
