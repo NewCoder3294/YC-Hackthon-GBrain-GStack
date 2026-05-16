@@ -12,7 +12,7 @@ interface Props {
 
 export function NavLink({ href, label }: Props) {
   const pathname = usePathname();
-  const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const active = pathname === href || pathname.startsWith(`${href}/`);
   return (
     <Link
       href={href}
