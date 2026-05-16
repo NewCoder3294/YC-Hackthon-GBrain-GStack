@@ -8,7 +8,6 @@ export function TopNav({ email }: { email: string }) {
         <span className="font-mono text-xs uppercase tracking-widest">CalTrans · D4</span>
         <nav className="flex items-center gap-1">
           <NavLink href={"/" as Route} label="Wall" shortcut="g w" />
-          <NavLink href={"/map" as Route} label="Map" shortcut="g m" />
           <NavLink href={"/incidents" as Route} label="Incidents" shortcut="g i" />
         </nav>
       </div>
