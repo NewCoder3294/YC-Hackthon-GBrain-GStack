@@ -20,6 +20,18 @@ yolov8n.pt
 .env*.save
 .env.*.local
 
+# `vercel env pull caltrans-cctv.env.local` (run at repo root) creates files
+# that don't start with .env — catch the `*.env.local` shape too.
+*.env.local
+*.env
+*.env.*.local
+*.secrets
+*.secrets.*
+
+# Allow-list templates (must be value-less).
+!.env.example
+!*.env.example
+
 # Dispatch audio lives in Supabase Storage (bucket: dispatch-audio).
 # README.md + manifest.example.json stay tracked; binaries do not.
 apps/web/public/dispatch-audio/*.m4a
