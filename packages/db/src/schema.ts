@@ -4,10 +4,13 @@ import {
   text,
   integer,
   doublePrecision,
+  real,
   numeric,
   boolean,
+  jsonb,
   timestamp,
   primaryKey,
+  index,
 } from "drizzle-orm/pg-core";
 
 export const cameras = pgTable("cameras", {
@@ -85,7 +88,48 @@ export const userCameraPins = pgTable(
   }),
 );
 
+/**
+ * signal_events — the shared ingestion substrate (TRD §3.1).
+ *
+ * Every Layer-1 producer (Caltrans camera detector, 911 transcript
+ * generator, citizen report form) writes here. The correlator (Nick)
+ * reads from here. Producers never read each other.
+ *
+ * Hari+Nick hour-1 contract decision: the TRD specifies
+ * GEOGRAPHY(POINT,4326); this repo has no PostGIS and `cameras`
+ * already uses plain lat/lng doubles, so signal_events follows the
+ * same convention. The correlator's 200m proximity check uses a
+ * bounding-box / haversine filter instead of ST_DWithin.
+ */
+export const signalEvents = pgTable(
+  "signal_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sourceType: text("source_type", {
+      enum: ["camera_public", "camera_private", "call_911", "citizen_report"],
+    }).notNull(),
+    sourceId: text("source_id").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    ingestedAt: timestamp("ingested_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    payload: jsonb("payload").notNull(),
+    confidence: real("confidence"),
+    rawClipUri: text("raw_clip_uri"),
+  },
+  (t) => ({
+    occurredAtIdx: index("signal_events_occurred_at_idx").on(
+      t.occurredAt.desc(),
+    ),
+    sourceTypeIdx: index("signal_events_source_type_idx").on(t.sourceType),
+  }),
+);
+
 export type Camera = typeof cameras.$inferSelect;
 export type NewCamera = typeof cameras.$inferInsert;
 export type Incident = typeof incidents.$inferSelect;
 export type Clip = typeof clips.$inferSelect;
+export type SignalEvent = typeof signalEvents.$inferSelect;
+export type NewSignalEvent = typeof signalEvents.$inferInsert;

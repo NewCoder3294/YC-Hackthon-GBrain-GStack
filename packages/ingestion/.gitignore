@@ -1,0 +1,4 @@
+# Transformers.js model cache (downloaded at runtime, never committed)
+.cache/
+models/
+*.onnx
