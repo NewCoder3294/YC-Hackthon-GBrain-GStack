@@ -1,8 +1,12 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { KgEdge, KgNode } from "@/components/kg/types";
-import { fetchRecentDispatch } from "@/lib/dispatch-fetch";
 import { isHighPriority, priorityLabel } from "@/lib/dispatch";
+import { scanDispatchAudio } from "@/lib/dispatch-audio-scan";
+import {
+  createSimulatorState,
+  nextDispatchCall,
+} from "@/lib/dispatch-simulator";
 
 interface GangRow {
   id: string;
@@ -145,7 +149,7 @@ export async function loadKgFromSupabase(): Promise<{
     decisionsRes,
     gbrainRes,
     eventsRes,
-    dispatchCalls,
+    audioFiles,
   ] = await Promise.all([
     supabase.from("gangs").select("id, name, aliases, color, active, notes"),
     supabase
@@ -192,9 +196,10 @@ export async function loadKgFromSupabase(): Promise<{
       )
       .order("occurred_at", { ascending: false })
       .limit(40),
-    // Live SF Open Data dispatch (audio readout source). Limited so the
-    // graph stays legible — KG shows the freshest activity at a glance.
-    fetchRecentDispatch({ limit: 30, revalidate: 60 }),
+    // Real SFPD scanner audio (captured from openmhz.com, stored under
+    // /public/dispatch-audio/). KG generates a small snapshot of recent
+    // calls using the same simulator that drives the live map.
+    scanDispatchAudio(),
   ]);
 
   const gangs = (gangsRes.data ?? []) as GangRow[];
@@ -430,40 +435,50 @@ export async function loadKgFromSupabase(): Promise<{
     }
   }
 
-  // Dispatch (audio-readout) nodes from live SFGov data, with seeded
-  // neighborhood location nodes so the graph has place-of-occurrence context.
-  for (const call of dispatchCalls) {
-    const placeName = call.neighborhood || call.district || "SF · unknown area";
-    const locId = neighborhoodId(placeName);
-    if (!seenLocations.has(locId)) {
+  // Dispatch (audio) nodes — generate a snapshot of recent SFPD scanner
+  // calls using the same simulator that drives the live map. KG shows
+  // what the operator has been hearing, with seeded neighborhood location
+  // nodes for place-of-occurrence context. Capped so the graph stays
+  // legible.
+  if (audioFiles.length > 0) {
+    const kgSim = createSimulatorState(audioFiles);
+    const sampleSize = Math.min(20, audioFiles.length * 3);
+    for (let i = 0; i < sampleSize; i++) {
+      const call = nextDispatchCall(kgSim);
+      const placeName = call.neighborhood || call.district || "SF · unknown area";
+      const locId = neighborhoodId(placeName);
+      if (!seenLocations.has(locId)) {
+        nodes.push({
+          id: locId,
+          kind: "location",
+          label: placeName,
+          sub: "neighborhood",
+          source: "live",
+        });
+        seenLocations.add(locId);
+      }
       nodes.push({
-        id: locId,
-        kind: "location",
-        label: placeName,
-        sub: "neighborhood (SFGov)",
+        id: `dispatch:${call.id}`,
+        kind: "dispatch",
+        label: `${call.callTypeCode ? `${call.callTypeCode} · ` : ""}${call.callType}`,
+        sub: `${call.address} · ${call.talkgroup}`,
+        meta: {
+          priority: priorityLabel(call.priority),
+          callNumber: call.callNumber,
+          agency: call.agency,
+          talkgroup: call.talkgroup,
+          urgent: isHighPriority(call.priority) ? "yes" : "no",
+          audio: call.fileName,
+        },
         source: "live",
       });
-      seenLocations.add(locId);
+      edges.push({
+        id: `e:loc-dispatch:${call.id}`,
+        source: locId,
+        target: `dispatch:${call.id}`,
+        label: "call",
+      });
     }
-    nodes.push({
-      id: `dispatch:${call.id}`,
-      kind: "dispatch",
-      label: `${call.callTypeCode ? `${call.callTypeCode} · ` : ""}${call.callType}`,
-      sub: `${call.address} · ${isoToHuman(call.receivedAt)}`,
-      meta: {
-        priority: priorityLabel(call.priority),
-        callNumber: call.callNumber,
-        agency: call.agency,
-        urgent: isHighPriority(call.priority) ? "yes" : "no",
-      },
-      source: "live",
-    });
-    edges.push({
-      id: `e:loc-dispatch:${call.id}`,
-      source: locId,
-      target: `dispatch:${call.id}`,
-      label: "call",
-    });
   }
 
   for (const a of alerts) {

@@ -1,71 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { isHighPriority, normalizeDispatchCalls, priorityLabel } from "./dispatch";
+import { isHighPriority, priorityLabel } from "./dispatch";
+import {
+  createSimulatorState,
+  jitterInterval,
+  mulberry32,
+  nextDispatchCall,
+  shuffleInPlace,
+} from "./dispatch-simulator";
+import type { AudioFile } from "./dispatch";
 
-const FIXTURE_OK = [
-  {
-    id: "39032836",
-    cad_number: "261342053",
-    received_datetime: "2026-05-14T13:58:25.000",
-    call_type_original: "917",
-    call_type_original_desc: "SUSPICIOUS PERSON",
-    call_type_final: "917",
-    call_type_final_desc: "SUSPICIOUS PERSON",
-    priority_original: "C",
-    priority_final: "B",
-    agency: "Police",
-    intersection_name: "LEAVENWORTH ST \\ TURK ST",
-    intersection_point: { type: "Point", coordinates: [-122.414053765, 37.782794446] },
-    analysis_neighborhood: "Tenderloin",
-    police_district: "TENDERLOIN",
-    disposition: "CIT",
-  },
-];
-
-describe("normalizeDispatchCalls", () => {
-  it("maps raw SODA records to DispatchCall shape", () => {
-    const result = normalizeDispatchCalls(FIXTURE_OK);
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject({
-      id: "39032836",
-      callNumber: "261342053",
-      callType: "SUSPICIOUS PERSON",
-      callTypeCode: "917",
-      priority: "B",
-      address: "LEAVENWORTH ST & TURK ST",
-      neighborhood: "Tenderloin",
-      district: "TENDERLOIN",
-      lat: 37.782794446,
-      lng: -122.414053765,
-    });
-  });
-
-  it("skips calls without intersection_point", () => {
-    const noPoint = [{ ...FIXTURE_OK[0], intersection_point: undefined }];
-    expect(normalizeDispatchCalls(noPoint)).toEqual([]);
-  });
-
-  it("falls back to original fields when final fields missing", () => {
-    const onlyOriginal = [
-      {
-        ...FIXTURE_OK[0],
-        call_type_final: undefined,
-        call_type_final_desc: undefined,
-        priority_final: undefined,
-      },
-    ];
-    const result = normalizeDispatchCalls(onlyOriginal);
-    expect(result).toHaveLength(1);
-    const r = result[0]!;
-    expect(r.callType).toBe("SUSPICIOUS PERSON");
-    expect(r.priority).toBe("C");
-  });
-
-  it("returns empty on non-array input", () => {
-    expect(normalizeDispatchCalls(null)).toEqual([]);
-    expect(normalizeDispatchCalls({})).toEqual([]);
-    expect(normalizeDispatchCalls("string")).toEqual([]);
-  });
-});
+const SAMPLE_FILES: AudioFile[] = Array.from({ length: 8 }, (_, i) => ({
+  file: `call-${String(i).padStart(3, "0")}.m4a`,
+  audioUrl: `/dispatch-audio/call-${String(i).padStart(3, "0")}.m4a`,
+  meta: null,
+}));
 
 describe("priorityLabel", () => {
   it("labels known priorities", () => {
@@ -73,22 +21,124 @@ describe("priorityLabel", () => {
     expect(priorityLabel("B")).toMatch(/urgent/i);
     expect(priorityLabel("C")).toMatch(/routine/i);
   });
-
-  it("falls back for unknown priorities", () => {
+  it("falls back for unknown / empty", () => {
     expect(priorityLabel("X")).toBe("Priority X");
     expect(priorityLabel("")).toBe("Unknown priority");
   });
 });
 
 describe("isHighPriority", () => {
-  it("identifies A and B as high", () => {
+  it("A and B are high", () => {
     expect(isHighPriority("A")).toBe(true);
     expect(isHighPriority("B")).toBe(true);
-    expect(isHighPriority("a")).toBe(true);
+    expect(isHighPriority("b")).toBe(true);
   });
-  it("treats C/E/other as not high", () => {
+  it("C and E and empty are not", () => {
     expect(isHighPriority("C")).toBe(false);
     expect(isHighPriority("E")).toBe(false);
     expect(isHighPriority("")).toBe(false);
+  });
+});
+
+describe("mulberry32", () => {
+  it("is deterministic for a given seed", () => {
+    const a = mulberry32(42);
+    const b = mulberry32(42);
+    const seqA = Array.from({ length: 5 }, () => a());
+    const seqB = Array.from({ length: 5 }, () => b());
+    expect(seqA).toEqual(seqB);
+  });
+  it("returns values in [0,1)", () => {
+    const r = mulberry32(1);
+    for (let i = 0; i < 50; i++) {
+      const v = r();
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThan(1);
+    }
+  });
+});
+
+describe("shuffleInPlace", () => {
+  it("preserves the set of elements", () => {
+    const xs = [1, 2, 3, 4, 5];
+    const rnd = mulberry32(7);
+    const out = shuffleInPlace([...xs], rnd);
+    expect([...out].sort()).toEqual(xs);
+  });
+});
+
+describe("jitterInterval", () => {
+  it("stays within bounds", () => {
+    const rnd = mulberry32(99);
+    for (let i = 0; i < 100; i++) {
+      const v = jitterInterval(15_000, rnd, 4_000, 45_000);
+      expect(v).toBeGreaterThanOrEqual(4_000);
+      expect(v).toBeLessThanOrEqual(45_000);
+    }
+  });
+});
+
+describe("nextDispatchCall", () => {
+  it("does not repeat the same audio file twice in a row across a deck of >1", () => {
+    const state = createSimulatorState(SAMPLE_FILES, { seed: 123 });
+    let prev: string | null = null;
+    for (let i = 0; i < 100; i++) {
+      const call = nextDispatchCall(state);
+      expect(call.fileName).not.toBe(prev);
+      prev = call.fileName;
+    }
+  });
+
+  it("avoids the same neighborhood twice in a row when possible", () => {
+    const state = createSimulatorState(SAMPLE_FILES, { seed: 456 });
+    let prev: string | null = null;
+    let repeats = 0;
+    for (let i = 0; i < 200; i++) {
+      const call = nextDispatchCall(state);
+      if (call.neighborhood === prev) repeats++;
+      prev = call.neighborhood;
+    }
+    // With 20 weighted hotspots and the avoid-last rule, we should
+    // never get a back-to-back repeat in this run.
+    expect(repeats).toBe(0);
+  });
+
+  it("places every pin within an SF-ish bounding box", () => {
+    const state = createSimulatorState(SAMPLE_FILES, { seed: 789 });
+    for (let i = 0; i < 200; i++) {
+      const call = nextDispatchCall(state);
+      expect(call.lat).toBeGreaterThan(37.7);
+      expect(call.lat).toBeLessThan(37.82);
+      expect(call.lng).toBeGreaterThan(-122.52);
+      expect(call.lng).toBeLessThan(-122.38);
+    }
+  });
+
+  it("uses manifest fields when present and generates the rest", () => {
+    const files: AudioFile[] = [
+      {
+        file: "real.m4a",
+        audioUrl: "/dispatch-audio/real.m4a",
+        meta: {
+          file: "real.m4a",
+          callType: "Manifest Type",
+          callTypeCode: "999",
+          priority: "A",
+        },
+      },
+    ];
+    const state = createSimulatorState(files, { seed: 1 });
+    const call = nextDispatchCall(state);
+    expect(call.callType).toBe("Manifest Type");
+    expect(call.callTypeCode).toBe("999");
+    expect(call.priority).toBe("A");
+    // Address comes from neighborhood fallback (no meta address provided).
+    expect(call.address.length).toBeGreaterThan(0);
+    expect(call.generated).toBe(false);
+  });
+
+  it("throws on empty deck", () => {
+    const state = createSimulatorState([], { seed: 1 });
+    expect(() => nextDispatchCall(state)).toThrow(/empty deck/);
   });
 });

@@ -9,3 +9,4 @@ dist
 coverage
 .vercel
 *.tsbuildinfo
+.gstack/

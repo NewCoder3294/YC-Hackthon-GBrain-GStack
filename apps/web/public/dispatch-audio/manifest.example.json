@@ -1,0 +1,18 @@
+[
+  {
+    "file": "2026-05-16-tenderloin-001.m4a",
+    "callType": "Suspicious person",
+    "callTypeCode": "917",
+    "priority": "C",
+    "talkgroup": "SFPD Dispatch A1",
+    "address": "Leavenworth & Turk",
+    "neighborhood": "Tenderloin"
+  },
+  {
+    "file": "2026-05-16-mission-007.m4a",
+    "callType": "Assault",
+    "callTypeCode": "240",
+    "priority": "A",
+    "talkgroup": "SFPD Dispatch B2"
+  }
+]

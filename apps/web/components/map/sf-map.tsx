@@ -9,7 +9,7 @@ import { IncidentPanel } from "./incident-panel";
 import { DispatchPanel } from "./dispatch-panel";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
 import { isHighPriority, type DispatchCall } from "@/lib/dispatch";
-import { useDispatchCalls } from "@/hooks/use-dispatch-calls";
+import { useDispatchSimulation } from "@/hooks/use-dispatch-simulation";
 import { cn } from "@/lib/utils";
 
 type CamWithCoords = CameraTileData & { lat: number; lng: number };
@@ -107,7 +107,7 @@ export function SFMap({ cameras }: Props) {
   const [selectedIncident, setSelectedIncident] = useState<WdIncident | null>(null);
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchCall | null>(null);
 
-  const dispatch = useDispatchCalls();
+  const dispatch = useDispatchSimulation();
   const filteredDispatch = useMemo(
     () => dispatch.calls.filter((c) => callMatchesPriority(c, dispatchPriority)),
     [dispatch.calls, dispatchPriority],
@@ -447,11 +447,25 @@ export function SFMap({ cameras }: Props) {
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={() => dispatch.setPaused(!dispatch.paused)}
+          title={dispatch.paused ? "Resume simulation" : "Pause simulation"}
+          className={cn(
+            "h-7 border px-2 font-mono text-[10px] uppercase tracking-widest",
+            dispatch.paused
+              ? "border-black bg-white text-black"
+              : "border-black bg-black text-white",
+          )}
+        >
+          {dispatch.paused ? "Sim paused" : "Sim live"}
+        </button>
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           {filteredCams.length} cams · {wdIncidents.length} incidents ·{" "}
-          {filteredDispatch.length}/{dispatch.calls.length} dispatch
+          {filteredDispatch.length}/{dispatch.calls.length} dispatch ·{" "}
+          {dispatch.fileCount} audio
           {dispatch.loading ? " (loading)" : ""}
-          {dispatch.error ? ` (error: ${dispatch.error})` : ""}
+          {dispatch.error ? ` · ${dispatch.error}` : ""}
         </span>
       </div>
 

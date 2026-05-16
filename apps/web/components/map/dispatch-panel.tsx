@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { isHighPriority, priorityLabel, type DispatchCall } from "@/lib/dispatch";
 
@@ -11,10 +11,7 @@ interface Props {
 
 function formatTime(iso: string): string {
   try {
-    return new Date(iso).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   } catch {
     return iso;
   }
@@ -29,49 +26,55 @@ function relativeTime(iso: string): string {
   return `${h}h ago`;
 }
 
-function buildReadout(call: DispatchCall): string {
-  const timeStr = formatTime(call.receivedAt);
-  const prio = priorityLabel(call.priority);
-  const districtPart = call.district ? ` In ${call.district.toLowerCase()} district.` : "";
-  return `Dispatch call. ${prio}. ${call.callType} reported at ${call.address}.${districtPart} Received at ${timeStr}. Call number ${call.callNumber}.`;
-}
-
 export function DispatchPanel({ call, onClose }: Props) {
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const [speaking, setSpeaking] = useState(false);
-  const [unsupported, setUnsupported] = useState(false);
-  const readout = buildReadout(call);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const speak = useCallback(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-      setUnsupported(true);
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(readout);
-    u.rate = 1.05;
-    u.pitch = 0.95;
-    u.volume = 1;
-    u.onstart = () => setSpeaking(true);
-    u.onend = () => setSpeaking(false);
-    u.onerror = () => setSpeaking(false);
-    utteranceRef.current = u;
-    window.speechSynthesis.speak(u);
-  }, [readout]);
-
-  const stop = useCallback(() => {
-    if (typeof window === "undefined") return;
-    window.speechSynthesis.cancel();
-    setSpeaking(false);
-  }, []);
-
-  // Auto-play once when the panel opens for a given call; stop on unmount/swap.
+  // Autoplay on open. Stop on unmount or call change.
   useEffect(() => {
-    speak();
+    const audio = audioRef.current;
+    if (!audio) return;
+    setError(null);
+    setPlaying(false);
+    // Most browsers allow autoplay-with-sound after the user has clicked
+    // (they did — they clicked the pin). If something blocks it, the user
+    // can press Replay.
+    audio
+      .play()
+      .then(() => setPlaying(true))
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : "autoplay blocked";
+        setError(msg);
+      });
     return () => {
-      stop();
+      audio.pause();
+      try {
+        audio.currentTime = 0;
+      } catch {
+        // ignored
+      }
     };
-  }, [speak, stop]);
+  }, [call.audioUrl]);
+
+  const replay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio
+      .play()
+      .then(() => setPlaying(true))
+      .catch((e: unknown) => {
+        setError(e instanceof Error ? e.message : "play failed");
+      });
+  };
+
+  const stop = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+    setPlaying(false);
+  };
 
   return (
     <aside className="absolute right-4 top-4 z-10 flex max-h-[calc(100vh-7rem)] w-[420px] flex-col overflow-hidden border border-neutral-200 bg-white">
@@ -85,7 +88,7 @@ export function DispatchPanel({ call, onClose }: Props) {
             </p>
           </div>
           <p className="mt-1 font-mono text-[10px] text-neutral-500">
-            {call.agency} · {relativeTime(call.receivedAt)} · {call.lat.toFixed(4)},{" "}
+            {call.talkgroup} · {relativeTime(call.receivedAt)} · {call.lat.toFixed(4)},{" "}
             {call.lng.toFixed(4)}
           </p>
         </div>
@@ -102,30 +105,45 @@ export function DispatchPanel({ call, onClose }: Props) {
       </header>
 
       <div className="relative flex h-28 w-full items-center justify-center border-b border-neutral-200 bg-black">
-        <AudioVisualizer active={speaking} />
+        <AudioVisualizer active={playing} />
         <span className="absolute bottom-2 left-2 font-mono text-[9px] uppercase tracking-widest text-white/70">
-          {speaking ? "Reading" : "Idle"}
+          {playing ? "Playing" : error ? "Tap replay" : "Idle"}
         </span>
         <span className="absolute right-2 top-2 flex items-center gap-1 font-mono text-[9px] uppercase tracking-widest text-white/70">
           <span
             className={cn(
               "inline-block h-1.5 w-1.5",
-              speaking ? "animate-pulse bg-white" : "bg-white/40",
+              playing ? "animate-pulse bg-white" : "bg-white/40",
             )}
           />
-          TTS
+          SCANNER
         </span>
+        <audio
+          ref={audioRef}
+          src={call.audioUrl}
+          preload="auto"
+          onEnded={() => setPlaying(false)}
+          onPause={() => setPlaying(false)}
+          onPlay={() => setPlaying(true)}
+          className="hidden"
+        />
       </div>
 
       <div className="flex items-center gap-2 border-b border-neutral-200 px-3 py-2">
         <button
           type="button"
-          onClick={speaking ? stop : speak}
-          disabled={unsupported}
-          className="h-8 flex-1 border border-black bg-black px-3 font-mono text-xs uppercase tracking-widest text-white disabled:opacity-30"
+          onClick={playing ? stop : replay}
+          className="h-8 flex-1 border border-black bg-black px-3 font-mono text-xs uppercase tracking-widest text-white"
         >
-          {speaking ? "Stop" : "Replay readout"}
+          {playing ? "Stop" : "Replay"}
         </button>
+        <a
+          href={call.audioUrl}
+          download={call.fileName}
+          className="h-8 border border-neutral-300 bg-white px-3 font-mono text-xs uppercase tracking-widest text-black hover:border-black inline-flex items-center"
+        >
+          Download
+        </a>
         <button
           type="button"
           onClick={() => {
@@ -138,6 +156,14 @@ export function DispatchPanel({ call, onClose }: Props) {
         </button>
       </div>
 
+      {error && (
+        <p className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+          {error.includes("interact") || error.includes("autoplay")
+            ? "Autoplay blocked — press Replay"
+            : `Audio error: ${error}`}
+        </p>
+      )}
+
       <div className="overflow-y-auto">
         <section className="border-b border-neutral-200 px-3 py-3">
           <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
@@ -148,44 +174,38 @@ export function DispatchPanel({ call, onClose }: Props) {
             <dd className="text-black">{call.callNumber}</dd>
             <dt className="text-neutral-500">Priority</dt>
             <dd className="text-black">{priorityLabel(call.priority)}</dd>
+            <dt className="text-neutral-500">Type</dt>
+            <dd className="text-black">
+              {call.callTypeCode} · {call.callType}
+            </dd>
             <dt className="text-neutral-500">Address</dt>
             <dd className="text-black">{call.address}</dd>
-            {call.neighborhood && (
-              <>
-                <dt className="text-neutral-500">Neighborhood</dt>
-                <dd className="text-black">{call.neighborhood}</dd>
-              </>
-            )}
-            {call.district && (
-              <>
-                <dt className="text-neutral-500">District</dt>
-                <dd className="text-black">{call.district}</dd>
-              </>
-            )}
+            <dt className="text-neutral-500">Neighborhood</dt>
+            <dd className="text-black">{call.neighborhood}</dd>
+            <dt className="text-neutral-500">District</dt>
+            <dd className="text-black">{call.district}</dd>
+            <dt className="text-neutral-500">Talkgroup</dt>
+            <dd className="text-black">{call.talkgroup}</dd>
             <dt className="text-neutral-500">Received</dt>
             <dd className="text-black">{formatTime(call.receivedAt)}</dd>
-            {call.disposition && (
-              <>
-                <dt className="text-neutral-500">Disposition</dt>
-                <dd className="text-black">{call.disposition}</dd>
-              </>
-            )}
+            <dt className="text-neutral-500">Source</dt>
+            <dd className="text-black truncate" title={call.fileName}>
+              {call.fileName}
+            </dd>
           </dl>
         </section>
 
-        <section className="px-3 py-3">
-          <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-            Readout (TTS)
-          </h3>
-          <p className="mt-2 border-l border-neutral-200 pl-3 font-mono text-xs leading-snug text-black">
-            {readout}
-          </p>
-          {unsupported && (
-            <p className="mt-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-              Web Speech API unavailable in this browser
+        {call.generated && (
+          <section className="border-b border-neutral-200 px-3 py-3">
+            <p className="font-mono text-[10px] leading-snug text-neutral-500">
+              <strong className="font-semibold text-neutral-700">Note:</strong>{" "}
+              metadata (call type, priority, address) is generated for this
+              audio file. The audio itself is real SFPD scanner traffic from
+              openmhz.com. Add a <code>manifest.json</code> in{" "}
+              <code>/public/dispatch-audio/</code> to override per-file.
             </p>
-          )}
-        </section>
+          </section>
+        )}
       </div>
     </aside>
   );

@@ -1,30 +1,11 @@
 import { z } from "zod";
 
-const point = z.object({
-  type: z.literal("Point"),
-  coordinates: z.tuple([z.number(), z.number()]),
-});
-
-const rawCall = z.object({
-  id: z.string(),
-  cad_number: z.string().optional(),
-  received_datetime: z.string(),
-  call_type_final: z.string().optional(),
-  call_type_final_desc: z.string().optional(),
-  call_type_original: z.string().optional(),
-  call_type_original_desc: z.string().optional(),
-  priority_final: z.string().optional(),
-  priority_original: z.string().optional(),
-  agency: z.string().optional(),
-  intersection_name: z.string().optional(),
-  intersection_point: point.optional(),
-  analysis_neighborhood: z.string().optional(),
-  police_district: z.string().optional(),
-  disposition: z.string().optional(),
-});
-
+// A single dispatch call surfaced on the map. Now backed by a real audio
+// file from the dispatch-audio folder (captured from openmhz.com) rather
+// than text-to-speech of SFGov metadata.
 export const dispatchCallSchema = z.object({
   id: z.string(),
+  audioUrl: z.string(),
   callNumber: z.string(),
   receivedAt: z.string(),
   callType: z.string(),
@@ -34,45 +15,34 @@ export const dispatchCallSchema = z.object({
   neighborhood: z.string(),
   district: z.string(),
   agency: z.string(),
-  disposition: z.string(),
+  talkgroup: z.string(),
   lat: z.number(),
   lng: z.number(),
+  fileName: z.string(),
+  generated: z.boolean(),
 });
 
 export type DispatchCall = z.infer<typeof dispatchCallSchema>;
 
-function cleanAddress(name: string | undefined): string {
-  if (!name) return "Unknown location";
-  return name.replace(/\s*\\\s*/g, " & ").replace(/\s+/g, " ").trim();
-}
+export const manifestEntrySchema = z.object({
+  file: z.string(),
+  callType: z.string().optional(),
+  callTypeCode: z.string().optional(),
+  priority: z.string().optional(),
+  talkgroup: z.string().optional(),
+  address: z.string().optional(),
+  neighborhood: z.string().optional(),
+  district: z.string().optional(),
+  callNumber: z.string().optional(),
+  time: z.string().optional(),
+});
 
-export function normalizeDispatchCalls(input: unknown): DispatchCall[] {
-  if (!Array.isArray(input)) return [];
-  const out: DispatchCall[] = [];
-  for (const item of input) {
-    const parsed = rawCall.safeParse(item);
-    if (!parsed.success) continue;
-    const r = parsed.data;
-    if (!r.intersection_point) continue;
-    const [lng, lat] = r.intersection_point.coordinates;
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-    out.push({
-      id: r.id,
-      callNumber: r.cad_number ?? r.id,
-      receivedAt: r.received_datetime,
-      callType: r.call_type_final_desc ?? r.call_type_original_desc ?? "Unknown",
-      callTypeCode: r.call_type_final ?? r.call_type_original ?? "",
-      priority: r.priority_final ?? r.priority_original ?? "",
-      address: cleanAddress(r.intersection_name),
-      neighborhood: r.analysis_neighborhood ?? "",
-      district: r.police_district ?? "",
-      agency: r.agency ?? "Police",
-      disposition: r.disposition ?? "",
-      lat,
-      lng,
-    });
-  }
-  return out;
+export type ManifestEntry = z.infer<typeof manifestEntrySchema>;
+
+export interface AudioFile {
+  file: string;
+  audioUrl: string;
+  meta: ManifestEntry | null;
 }
 
 export function priorityLabel(p: string): string {
