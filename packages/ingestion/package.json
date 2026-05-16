@@ -13,7 +13,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "camera": "tsx src/camera/run.ts",
-    "calls": "tsx src/calls/run.ts"
+    "calls": "tsx src/calls/run.ts",
+    "db:apply": "tsx src/apply-migration.ts"
   },
   "dependencies": {
     "@caltrans/db": "workspace:*",
