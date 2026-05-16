@@ -1,12 +1,17 @@
 import type { Route } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { NavLink } from "./nav-link";
 
 export function TopNav() {
   return (
     <header className="flex h-12 items-center justify-between border-b border-neutral-200 px-4">
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2">
+        <Link
+          href={"/" as Route}
+          className="flex items-center gap-2 hover:opacity-80"
+          title="WatchDog home"
+        >
           <Image
             src="/watchdog.png"
             alt="WatchDog"
@@ -18,7 +23,7 @@ export function TopNav() {
           <span className="font-mono text-sm font-semibold uppercase tracking-[0.2em]">
             WatchDog
           </span>
-        </div>
+        </Link>
         <nav className="flex items-center gap-0.5">
           <NavLink href={"/wall" as Route} label="Wall" />
           <NavLink href={"/map" as Route} label="Map" />
@@ -31,3 +36,4 @@ export function TopNav() {
     </header>
   );
 }
+
