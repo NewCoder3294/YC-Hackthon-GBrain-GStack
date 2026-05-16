@@ -1,6 +1,14 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { IncidentDetail, IncidentFilters, IncidentRow, Severity } from "./types";
+import { scanDispatchAudio } from "@/lib/dispatch-audio-scan";
+import { createSimulatorState, nextDispatchCall } from "@/lib/dispatch-simulator";
+import type {
+  DispatchIncidentRow,
+  IncidentDetail,
+  IncidentFilters,
+  IncidentRow,
+  Severity,
+} from "./types";
 
 export { thumbnailUrl } from "./thumbnail-url";
 
@@ -163,5 +171,73 @@ export async function getClipSignedUrl(
     .createSignedUrl(storagePath, expiresInSeconds);
   if (error) return null;
   return data?.signedUrl ?? null;
+}
+
+// --- Dispatch audio rows --------------------------------------------------
+
+function priorityToSeverity(priority: string): Severity {
+  const p = priority.toUpperCase();
+  if (p === "A") return "high";
+  if (p === "B") return "med";
+  return "low";
+}
+
+// Generate dispatch incident rows from the audio folder using the
+// simulator with a fixed seed so the snapshot is stable across reloads.
+// Filters apply post-generation (severity, q). Time-window filters
+// (from/to) and clip-specific filters (route, tag) are ignored since
+// dispatch entries don't have those dimensions.
+export async function listDispatchIncidents(
+  filters: IncidentFilters,
+): Promise<DispatchIncidentRow[]> {
+  const files = await scanDispatchAudio();
+  if (files.length === 0) return [];
+
+  // Fixed seed → deterministic snapshot. One row per audio file so the
+  // incidents archive shows the full catalog.
+  const state = createSimulatorState(files, { seed: 0xa1ec1d });
+  const rows: DispatchIncidentRow[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const call = nextDispatchCall(state);
+    const severity = priorityToSeverity(call.priority);
+    rows.push({
+      id: `dispatch:${call.fileName}`,
+      kind: "dispatch",
+      title: call.callType,
+      callTypeCode: call.callTypeCode,
+      priority: call.priority,
+      severity,
+      notes: call.address,
+      neighborhood: call.neighborhood,
+      district: call.district,
+      talkgroup: call.talkgroup,
+      talkgroupId: call.talkgroupId,
+      audioUrl: call.audioUrl,
+      fileName: call.fileName,
+      // Use the recorded time when available (parsed from openmhz
+      // filename) so the archive sorts chronologically with clip rows.
+      createdAt: call.recordedAt ?? call.receivedAt,
+    });
+  }
+
+  return rows.filter((r) => {
+    if (filters.severity && r.severity !== filters.severity) return false;
+    if (filters.q) {
+      const needle = filters.q.toLowerCase();
+      const hay =
+        `${r.title} ${r.callTypeCode} ${r.notes} ${r.neighborhood} ${r.district} ${r.talkgroup}`.toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    if (filters.from) {
+      if (new Date(r.createdAt).getTime() < new Date(filters.from).getTime()) return false;
+    }
+    if (filters.to) {
+      if (new Date(r.createdAt).getTime() > new Date(filters.to).getTime()) return false;
+    }
+    // route + tag are clip-specific; dispatch rows are dropped if either
+    // filter is active so the table doesn't surface them out of context.
+    if (filters.route || filters.tag) return false;
+    return true;
+  });
 }
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import type { Route } from "next";
 
 type SourceType = "camera" | "call" | "citizen" | "shotspotter";
 type Severity = "low" | "med" | "high";
@@ -75,7 +76,7 @@ function Header() {
       </div>
       <Clock />
       <Link
-        href="/wall"
+        href={"/wall" as Route}
         className="border border-black bg-black px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-white transition-colors hover:bg-neutral-700"
       >
         Open dispatcher →
@@ -129,7 +130,7 @@ function Hero() {
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
-              href="/wall"
+              href={"/wall" as Route}
               className="border border-black bg-black px-4 py-2 font-mono text-[11px] uppercase tracking-widest text-white transition-colors hover:bg-neutral-700"
             >
               Open dispatcher view →
@@ -569,7 +570,7 @@ function ClosingCta() {
           For dispatchers, by way of the homeowner whose camera is being queried.
         </p>
         <Link
-          href="/wall"
+          href={"/wall" as Route}
           className="mt-6 inline-block border border-black bg-black px-4 py-2 font-mono text-[11px] uppercase tracking-widest text-white transition-colors hover:bg-neutral-700"
         >
           Open dispatcher →
