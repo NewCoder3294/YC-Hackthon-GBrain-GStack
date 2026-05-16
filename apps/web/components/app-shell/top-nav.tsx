@@ -27,6 +27,7 @@ export function TopNav() {
         <nav className="flex items-center gap-0.5">
           <NavLink href={"/wall" as Route} label="Wall" />
           <NavLink href={"/map" as Route} label="Map" />
+          <NavLink href={"/live" as Route} label="Live" />
           <NavLink href={"/kg" as Route} label="Knowledge Graph" />
           <NavLink href={"/incidents" as Route} label="Incidents" />
           <NavLink href={"/enrichment" as Route} label="Web Search" />

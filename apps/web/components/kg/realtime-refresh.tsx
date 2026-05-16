@@ -14,20 +14,26 @@ const WATCHED_TABLES = [
   "decisions",
   "pages",
   "gang_events",
+  "live_incidents",
 ] as const;
 
+const REFRESH_DEBOUNCE_MS = 2000;
+
 /**
- * Subscribes to Postgres realtime changes on the GBrain-shaped tables and
- * calls router.refresh() on each event so the server component re-runs
- * loadKgFromSupabase and the KG redraws with the new data.
+ * Subscribes to Postgres realtime changes on the GBrain + live_incidents
+ * tables and calls router.refresh() so server components re-run and the
+ * UI redraws with the new data.
  *
- * A small "● live" status pip flashes when a refresh fires so the
- * dispatcher can see the graph is alive.
+ * Refreshes are debounced (2s window) so a burst of inserts — e.g.,
+ * SFPD CAD sync writing dozens of rows — collapses to one re-render.
+ *
+ * A small "● live" status pip flashes whenever a refresh has just fired.
  */
 export function RealtimeRefresh({ channelName = "kg-live" }: Props) {
   const router = useRouter();
   const [flash, setFlash] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastEventRef = useRef<string>("");
 
   useEffect(() => {
@@ -42,13 +48,19 @@ export function RealtimeRefresh({ channelName = "kg-live" }: Props) {
           setFlash(true);
           if (flashTimer.current) clearTimeout(flashTimer.current);
           flashTimer.current = setTimeout(() => setFlash(false), 1200);
-          router.refresh();
+          // Debounce refresh: collapse burst inserts into one re-render.
+          if (refreshTimer.current) clearTimeout(refreshTimer.current);
+          refreshTimer.current = setTimeout(() => {
+            refreshTimer.current = null;
+            router.refresh();
+          }, REFRESH_DEBOUNCE_MS);
         },
       );
     }
     channel.subscribe();
     return () => {
       if (flashTimer.current) clearTimeout(flashTimer.current);
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
       supabase.removeChannel(channel);
     };
   }, [router, channelName]);

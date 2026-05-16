@@ -11,6 +11,7 @@ import {
   timestamp,
   primaryKey,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const cameras = pgTable("cameras", {
@@ -127,9 +128,75 @@ export const signalEvents = pgTable(
   }),
 );
 
+// External-source live incidents (SFPD CAD, SF 311, SF Fire/EMS, 511, etc.).
+// Kept separate from `incidents` (which is for manual/OpenClaw human-curated
+// records that link to camera clips). Each row is one event from one source;
+// (source, source_uid) is unique so re-polling upserts.
+// Backing migration: packages/db/migrations/0003_live_incidents.sql.
+export const liveIncidents = pgTable(
+  "live_incidents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    source: text("source").notNull(),
+    sourceUid: text("source_uid").notNull(),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    subtitle: text("subtitle"),
+    severity: text("severity", { enum: ["low", "med", "high"] })
+      .notNull()
+      .default("low"),
+    priority: text("priority"),
+    status: text("status"),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    geoPrecision: text("geo_precision", {
+      enum: ["exact", "intersection", "neighborhood", "unknown"],
+    })
+      .notNull()
+      .default("unknown"),
+    neighborhood: text("neighborhood"),
+    address: text("address"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    ingestedAt: timestamp("ingested_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    acknowledgedBy: uuid("acknowledged_by"),
+    acknowledgedAt: timestamp("acknowledged_at", { withTimezone: true }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    raw: jsonb("raw"),
+  },
+  (t) => ({
+    sourceUidUq: uniqueIndex("live_incidents_source_source_uid_unique").on(
+      t.source,
+      t.sourceUid,
+    ),
+    sourceTimeIdx: index("idx_live_incidents_source_time").on(
+      t.source,
+      t.occurredAt,
+    ),
+    timeIdx: index("idx_live_incidents_time").on(t.occurredAt),
+  }),
+);
+
+// Per-source sync bookkeeping: when did each source last run, did it succeed,
+// and what is the highest `updated_at` we've seen (for incremental polling).
+export const liveIncidentSyncs = pgTable("live_incident_syncs", {
+  source: text("source").primaryKey(),
+  lastRunAt: timestamp("last_run_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastStatus: text("last_status").notNull().default("ok"),
+  lastError: text("last_error"),
+  rowsUpserted: integer("rows_upserted").notNull().default(0),
+  lastHighWaterMark: timestamp("last_high_water_mark", { withTimezone: true }),
+});
+
 export type Camera = typeof cameras.$inferSelect;
 export type NewCamera = typeof cameras.$inferInsert;
 export type Incident = typeof incidents.$inferSelect;
 export type Clip = typeof clips.$inferSelect;
 export type SignalEvent = typeof signalEvents.$inferSelect;
 export type NewSignalEvent = typeof signalEvents.$inferInsert;
+export type LiveIncident = typeof liveIncidents.$inferSelect;
+export type NewLiveIncident = typeof liveIncidents.$inferInsert;
+export type LiveIncidentSync = typeof liveIncidentSyncs.$inferSelect;

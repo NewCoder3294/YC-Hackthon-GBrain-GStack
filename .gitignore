@@ -20,6 +20,18 @@ yolov8n.pt
 .env*.save
 .env.*.local
 
+# `vercel env pull` (run at repo root) creates files that don't start
+# with .env — catch the `*.env.local` shape too.
+*.env.local
+*.env
+*.env.*.local
+*.secrets
+*.secrets.*
+
+# Allow-list templates (must be value-less).
+!.env.example
+!*.env.example
+
 # Local audio binaries should not be committed
 apps/web/public/dispatch-audio/*.m4a
 apps/web/public/dispatch-audio/*.mp3
