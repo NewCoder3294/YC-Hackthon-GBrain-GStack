@@ -105,11 +105,10 @@ export function OpenclawFeed({ cards }: Props) {
   const [severity, setSeverity] = useState<SeverityFilter>("all");
   const [decision, setDecision] = useState<DecisionFilter>("all");
   /**
-   * Default: only show cards that have a Claude-generated narrative.
-   * "Fused incident — N signals" stubs from before LLM mode was wired
-   * are noise — toggle to surface them if needed.
+   * Default: show everything (raw + Claude-enriched). Toggle off to
+   * narrow to just Claude-described cards.
    */
-  const [showRaw, setShowRaw] = useState(false);
+  const [showRaw, setShowRaw] = useState(true);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -182,7 +181,7 @@ export function OpenclawFeed({ cards }: Props) {
               showRaw ? "bg-white" : "bg-neutral-300",
             )}
           />
-          Show raw
+          {showRaw ? "All" : "Claude only"}
           {rawHiddenCount > 0 && (
             <span className="text-neutral-400">· {rawHiddenCount} hidden</span>
           )}
