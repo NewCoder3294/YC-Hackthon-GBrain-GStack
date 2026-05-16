@@ -22,3 +22,12 @@ cp apps/web/.env.example apps/web/.env.local
 # fill in values from Supabase
 pnpm dev
 ```
+
+## Manual sync trigger
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" \
+  http://localhost:3000/api/cron/sync-cameras
+```
+
+Expected JSON: `{ "count": <int>, "syncedAt": "<iso>" }`
