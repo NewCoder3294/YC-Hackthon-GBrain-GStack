@@ -21,7 +21,6 @@ const SCENARIO: Omit<Signal, "id" | "ts">[] = [
   { source: "camera", location: "MISSION & 16TH", detail: "pose: fighting · 0.87", severity: "med" },
   { source: "call", location: "MISSION & 16TH", detail: "911 hangup", severity: "med" },
   { source: "shotspotter", location: "MISSION & 16TH", detail: "single report", severity: "high" },
-  { source: "citizen", location: "MISSION & 16TH", detail: "\"two men arguing\"", severity: "high" },
 ];
 
 const SOURCE_GLYPH: Record<SourceType, string> = {
@@ -44,6 +43,7 @@ export function Landing() {
     <main className="relative min-h-screen overflow-x-hidden bg-white text-black">
       <Header />
       <Hero />
+      <HookStat />
       <HowItWorks />
       <Pillars />
       <NotSection />
@@ -118,11 +118,12 @@ function Hero() {
             <FlashWord delay={1200}>Every query auditable.</FlashWord>
           </h1>
           <p className="mt-8 max-w-xl font-mono text-sm leading-relaxed text-neutral-700">
-            A 911 hangup, a streetlight camera detection, a citizen report, a
-            ShotSpotter ping — today they sit in four systems watched by four
-            humans. WatchDog correlates them into one dispatcher view, with
-            institutional memory of every prior incident and symmetric
-            transparency for the camera owners whose feeds are being queried.
+            A 911 hangup, a streetlight camera detection, a ShotSpotter ping —
+            today they sit in three systems watched by three humans. WatchDog
+            correlates them into one dispatcher view with institutional memory
+            of every prior incident. <span className="text-black">Every byte
+            on this site is real data — live SFPD scanner audio, live SF
+            cameras, live dispatch records.</span>
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
@@ -141,6 +142,40 @@ function Hero() {
           <StatStrip />
         </div>
         <SignalFeed />
+      </div>
+    </section>
+  );
+}
+
+function HookStat() {
+  return (
+    <section className="border-b border-neutral-200 bg-black text-white">
+      <div className="mx-auto max-w-4xl px-6 py-20 text-center md:py-24">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
+          Why this exists
+        </p>
+        <p className="mt-6 font-mono text-3xl leading-[1.15] tracking-tight md:text-5xl">
+          <span
+            className="block tabular-nums text-white"
+            style={{ fontVariantNumeric: "tabular-nums" }}
+          >
+            62%
+          </span>
+          <span className="mt-3 block text-neutral-300 md:text-4xl">
+            of violent crimes in major urban areas go completely{" "}
+            <span className="text-white">unreported</span> to law enforcement.
+          </span>
+        </p>
+        <p className="mt-6 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+          Source · Bureau of Justice Statistics
+        </p>
+        <p className="mx-auto mt-8 max-w-2xl font-mono text-xs leading-relaxed text-neutral-300 md:text-sm">
+          WatchDog surfaces the signals that are already out there — live
+          SFPD scanner radio, live CalTrans street cameras, live SFGov
+          dispatch records — so the reported share doesn&apos;t decide what
+          gets seen. <span className="text-white">Everything below is real
+          data, pulled live.</span>
+        </p>
       </div>
     </section>
   );
@@ -251,7 +286,7 @@ function YCBadge() {
 type FeedPhase = "idle" | "ingesting" | "fusing" | "fused" | "held";
 
 function SignalFeed() {
-  const [filled, setFilled] = useState<(Signal | null)[]>([null, null, null, null]);
+  const [filled, setFilled] = useState<(Signal | null)[]>([null, null, null]);
   const [phase, setPhase] = useState<FeedPhase>("idle");
   const counterRef = useRef(0);
 
@@ -260,7 +295,7 @@ function SignalFeed() {
 
     async function run() {
       while (!cancelled) {
-        setFilled([null, null, null, null]);
+        setFilled([null, null, null]);
         setPhase("idle");
         await wait(700);
         if (cancelled) return;
@@ -351,7 +386,7 @@ function SignalRow({
   index: number;
   fusing: boolean;
 }) {
-  const PLACEHOLDER_ORDER = ["camera", "call", "shotspotter", "citizen"] as const satisfies readonly SourceType[];
+  const PLACEHOLDER_ORDER = ["camera", "call", "shotspotter"] as const satisfies readonly SourceType[];
   const placeholderSrc: SourceType =
     PLACEHOLDER_ORDER[index % PLACEHOLDER_ORDER.length] ?? "camera";
   return (
@@ -468,9 +503,10 @@ function HowItWorks() {
             </span>
           </div>
           <p className="mt-6 max-w-2xl font-mono text-sm leading-relaxed text-neutral-700">
-            Four siloed signal streams become one ranked queue, an institutional
-            memory of every prior decision, and a public audit trail the camera
-            owner controls.
+            Three siloed signal streams become one ranked queue, an
+            institutional memory of every prior decision, and an operator
+            console that approves, reassigns, or kills every dispatch
+            before it goes out.
           </p>
         </div>
       </section>
@@ -504,15 +540,15 @@ function HowItWorks() {
 
       <HowStep
         n="03"
-        title="Consent"
-        kicker="Owner-authored access, both ways logged"
-        caption="Camera owners — homeowners, businesses, CalTrans — author the policy themselves: geofence, time windows, incident types, warrant requirements. The gate runs as code on every police query. Allowed and denied alike are written to the owner's audit log."
+        title="Decision"
+        kicker="Approve, reassign, or kill — predicted and live"
+        caption="Predicted incidents (GBrain correlated something across signals) and live dispatches (a real call just came in) land in the same queue with an officer pre-assigned by talkgroup affinity. The operator has a 30-second window to approve, reassign, or cancel before the dispatch auto-fires. Every decision writes back to memory."
         bullets={[
-          "Policy-as-code: declarative rules, no human-in-the-loop required",
-          "Symmetric audit: police and owner both see the access trail",
-          "Defaults to deny when a rule is missing — never opt-in by silence",
+          "One queue for predicted + actual — no separate inbox",
+          "30s visible countdown before auto-dispatch fires",
+          "Cancel / reassign / approve per card — every action audited",
         ]}
-        diagram={<ConsentDiagram />}
+        diagram={<DecisionDiagram />}
       />
     </>
   );
@@ -538,7 +574,7 @@ function HowStep({
   return (
     <section className="border-b border-neutral-200">
       <div className="mx-auto max-w-6xl px-6 py-20 lg:py-24">
-        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[5fr_7fr] lg:gap-16">
+        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[4fr_8fr] lg:gap-16">
           <div className={mirror ? "lg:order-2" : ""}>
             <div className="flex items-baseline gap-4">
               <span className="font-mono text-5xl leading-none tracking-tight text-neutral-200 tabular-nums">
@@ -569,7 +605,7 @@ function HowStep({
             </ul>
           </div>
           <div className={mirror ? "lg:order-1" : ""}>
-            <div className="border border-neutral-200 bg-white p-4 md:p-6">
+            <div className="wd-diagram-shell border border-neutral-200 bg-white p-5 md:p-8">
               {diagram}
             </div>
           </div>
@@ -647,10 +683,9 @@ function FusionDiagram() {
     { glyph: "CAM", label: "Streetlight 14B", ts: "22:50:01", meta: "pose: fighting · 0.87" },
     { glyph: "911", label: "Hangup", ts: "22:50:08", meta: "no callback" },
     { glyph: "SHT", label: "ShotSpotter", ts: "22:50:18", meta: "1 report" },
-    { glyph: "RPT", label: "Citizen", ts: "22:50:22", meta: "\"two men arguing\"" },
   ];
-  const baseY = 36;
-  const rowH = 32;
+  const rowH = 56;
+  const baseY = 60;
   return (
     <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Fusion diagram">
       <ArrowDef id="arr-fusion" />
@@ -661,34 +696,54 @@ function FusionDiagram() {
       {sources.map((s, i) => {
         const y = baseY + i * rowH;
         return (
-          <g key={s.glyph}>
-            <text x={16} y={y + 12} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+          <g key={s.glyph} className="wd-fusion-source" style={{ cursor: "pointer" }}>
+            <rect
+              className="wd-fusion-source-bg"
+              x={12}
+              y={y - 4}
+              width={168}
+              height={44}
+              rx={2}
+              fill="white"
+              stroke="transparent"
+            />
+            <text x={20} y={y + 8} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
               {s.ts}
             </text>
-            <rect x={16} y={y + 16} width={28} height={14} fill="white" stroke={DIAGRAM_STROKE} />
+            <rect
+              className="wd-fusion-source-chip"
+              x={20}
+              y={y + 12}
+              width={32}
+              height={16}
+              fill="white"
+              stroke={DIAGRAM_STROKE}
+            />
             <text
-              x={30}
-              y={y + 26}
+              x={36}
+              y={y + 23}
               textAnchor="middle"
               fontFamily={PX_MONO}
-              fontSize="8"
+              fontSize="9"
+              fontWeight="600"
               fill={DIAGRAM_STROKE}
             >
               {s.glyph}
             </text>
-            <text x={50} y={y + 26} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
+            <text x={58} y={y + 23} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
               {s.label}
             </text>
-            <text x={50} y={y + 12} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+            <text x={58} y={y + 35} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
               {s.meta}
             </text>
             <path
-              d={`M180,${y + 23} C 192,${y + 23} 200,140 232,140`}
+              className="wd-fusion-source-arrow"
+              d={`M180,${y + 20} C 198,${y + 20} 206,140 232,140`}
               fill="none"
               stroke={DIAGRAM_STROKE}
               strokeWidth="1"
               markerEnd="url(#arr-fusion)"
-              style={{ animation: `wd-fade-up 600ms ease-out ${i * 120}ms both` }}
+              style={{ animation: `wd-fade-up 600ms ease-out ${i * 140}ms both` }}
             />
           </g>
         );
@@ -730,7 +785,7 @@ function FusionDiagram() {
         MED
       </text>
       <text x={400} y={180} fontFamily={PX_MONO} fontSize="7" fill="#a3a3a3">
-        4 signals
+        3 signals
       </text>
     </svg>
   );
@@ -785,8 +840,9 @@ function MemoryDiagram() {
         const y = 70 + i * 38;
         const isNew = i === 0;
         return (
-          <g key={c.ts}>
+          <g key={c.ts} className="wd-memory-chip" style={{ cursor: "pointer" }}>
             <rect
+              className="wd-memory-chip-bg"
               x={184}
               y={y}
               width={128}
@@ -847,116 +903,192 @@ function MemoryDiagram() {
   );
 }
 
-function ConsentDiagram() {
-  const checks: { rule: string; status: "ok" | "fail" }[] = [
-    { rule: "GEOFENCE", status: "ok" },
-    { rule: "TIME WINDOW", status: "ok" },
-    { rule: "INCIDENT TYPE", status: "ok" },
-    { rule: "WARRANT", status: "fail" },
-  ];
+
+type DecisionState = "pending" | "approved" | "reassigned" | "rejected";
+
+function DecisionDiagram() {
+  const [predicted, setPredicted] = useState<DecisionState>("pending");
+  const [live, setLive] = useState<DecisionState>("pending");
   return (
-    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Consent diagram">
-      <ArrowDef id="arr-consent" />
-      <ArrowDef id="arr-consent-fail" color={DIAGRAM_ACCENT} />
-      <ZoneFrame x={4} y={4} w={120} h={272} step="01" label="query" />
-      <ZoneFrame x={136} y={4} w={188} h={272} step="02" label="policy-as-code" />
-      <ZoneFrame x={336} y={4} w={140} h={272} step="03" label="audit log" />
-
-      <rect x={16} y={84} width={96} height={104} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={24} y={100} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
-        POLICE · SFPD
-      </text>
-      <text x={24} y={120} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
-        clip request
-      </text>
-      <text x={24} y={138} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        22:50–22:55
-      </text>
-      <text x={24} y={150} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        cam 14B
-      </text>
-      <text x={24} y={162} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        type: assault
-      </text>
-      <text x={24} y={178} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        warrant: no
-      </text>
-
-      <path
-        d="M112,136 L150,136"
-        stroke={DIAGRAM_STROKE}
-        markerEnd="url(#arr-consent)"
+    <div className="flex flex-col gap-3" role="group" aria-label="Decision diagram">
+      <DecisionCard
+        kind="predicted"
+        priority="A"
+        title="245 ADW · Mission corridor"
+        sub="GBrain: A + B in same neighborhood, 4 calls in 7m · conf 0.78"
+        officer="Off. Reyes 4B21 · Co. B"
+        countdown={22}
+        state={predicted}
+        onApprove={() => setPredicted("approved")}
+        onReassign={() => setPredicted("reassigned")}
+        onReject={() => setPredicted("rejected")}
+        onReset={() => setPredicted("pending")}
       />
+      <DecisionCard
+        kind="live"
+        priority="B"
+        title="594 Vandalism · Eddy & Leavenworth"
+        sub="SFPD Co. D (Tenderloin) · TG 816 · call #261342053"
+        officer="Off. Patel 4D05 · Co. D"
+        countdown={9}
+        state={live}
+        onApprove={() => setLive("approved")}
+        onReassign={() => setLive("reassigned")}
+        onReject={() => setLive("rejected")}
+        onReset={() => setLive("pending")}
+      />
+      <p className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+        Click any button to preview · click the status badge to reset
+      </p>
+    </div>
+  );
+}
 
-      <rect x={150} y={64} width={160} height={144} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={160} y={80} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
-        OWNER POLICY · CAM 14B
-      </text>
-      <line x1={150} y1={86} x2={310} y2={86} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
-      {checks.map((c, i) => {
-        const y = 94 + i * 22;
-        const isFail = c.status === "fail";
-        return (
-          <g key={c.rule}>
-            <text x={160} y={y + 10} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
-              {c.rule}
-            </text>
-            <rect
-              x={278}
-              y={y}
-              width={22}
-              height={14}
-              fill={isFail ? DIAGRAM_ACCENT : "white"}
-              stroke={isFail ? DIAGRAM_ACCENT : DIAGRAM_STROKE}
+function DecisionCard({
+  kind,
+  priority,
+  title,
+  sub,
+  officer,
+  countdown,
+  state,
+  onApprove,
+  onReassign,
+  onReject,
+  onReset,
+}: {
+  kind: "predicted" | "live";
+  priority: string;
+  title: string;
+  sub: string;
+  officer: string;
+  countdown: number;
+  state: DecisionState;
+  onApprove: () => void;
+  onReassign: () => void;
+  onReject: () => void;
+  onReset: () => void;
+}) {
+  const isPredicted = kind === "predicted";
+  const isDone = state !== "pending";
+  const pctLeft = Math.max(0, Math.min(1, countdown / 30));
+  return (
+    <article
+      className={[
+        "group relative overflow-hidden border bg-white transition-all duration-200",
+        isPredicted
+          ? "border-l-[3px] border-l-black border-y-neutral-200 border-r-neutral-200"
+          : "border-neutral-300",
+        state === "approved" && "bg-black text-white",
+        state === "rejected" && "bg-neutral-50 opacity-70",
+        state === "reassigned" && "bg-neutral-50",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <header className="flex items-center justify-between gap-2 border-b border-neutral-200/60 px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          <span
+            className={
+              isPredicted
+                ? "border border-black bg-black px-1 py-px font-mono text-[8px] uppercase tracking-widest text-white"
+                : "border border-neutral-500 bg-white px-1 py-px font-mono text-[8px] uppercase tracking-widest text-neutral-600"
+            }
+          >
+            {isPredicted ? "PRED" : "LIVE"}
+          </span>
+          <span className="border border-black bg-white px-1 py-px font-mono text-[8px] font-bold uppercase tracking-widest text-black">
+            P{priority}
+          </span>
+          <span className="truncate font-mono text-[11px] uppercase tracking-widest">
+            {title}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onReset}
+          aria-label="Reset decision"
+          className={[
+            "shrink-0 border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-widest transition-colors",
+            state === "approved"
+              ? "border-white text-white hover:bg-white hover:text-black"
+              : state === "rejected"
+                ? "border-neutral-400 text-neutral-500 hover:border-black hover:text-black"
+                : state === "reassigned"
+                  ? "border-neutral-500 text-neutral-700 hover:border-black hover:text-black"
+                  : "border-neutral-200 text-neutral-400 hover:border-black hover:text-black",
+          ].join(" ")}
+        >
+          {state === "approved" && "Approved ✓"}
+          {state === "rejected" && "Rejected ✗"}
+          {state === "reassigned" && "Reassigned ↺"}
+          {state === "pending" && "Pending"}
+        </button>
+      </header>
+      <div className="px-3 py-2">
+        <p className={`font-mono text-[10px] leading-snug ${state === "approved" ? "text-white/80" : "text-neutral-500"}`}>
+          {sub}
+        </p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className={`truncate font-mono text-[10px] ${state === "approved" ? "text-white" : "text-black"}`}>
+            {officer}
+          </span>
+          {!isDone && (
+            <span className="shrink-0 font-mono text-[9px] uppercase tracking-widest text-neutral-500">
+              Auto in {countdown}s
+            </span>
+          )}
+        </div>
+        {!isDone && (
+          <div className="mt-1.5 h-[2px] w-full bg-neutral-100">
+            <div
+              className="h-full bg-black"
+              style={{ width: `${pctLeft * 100}%`, transition: "width 320ms ease" }}
             />
-            <text
-              x={289}
-              y={y + 10}
-              textAnchor="middle"
-              fontFamily={PX_MONO}
-              fontSize="9"
-              fill={isFail ? "white" : DIAGRAM_STROKE}
-            >
-              {isFail ? "✗" : "✓"}
-            </text>
-          </g>
-        );
-      })}
-
-      <path
-        d="M310,136 C 322,136 322,76 348,76"
-        fill="none"
-        stroke={DIAGRAM_STROKE}
-        strokeDasharray="2 2"
-        markerEnd="url(#arr-consent)"
-      />
-      <path
-        d="M310,136 C 322,136 322,196 348,196"
-        fill="none"
-        stroke={DIAGRAM_ACCENT}
-        markerEnd="url(#arr-consent-fail)"
-      />
-
-      <rect x={348} y={60} width={120} height={32} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={356} y={76} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
-        22:50:31 ALLOW
-      </text>
-      <text x={356} y={86} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
-        clip · 5 s · cam 14B
-      </text>
-
-      <rect x={348} y={180} width={120} height={32} fill={DIAGRAM_ACCENT} />
-      <text x={356} y={196} fontFamily={PX_MONO} fontSize="9" fill="white">
-        22:50:31 DENY
-      </text>
-      <text x={356} y={206} fontFamily={PX_MONO} fontSize="7" fill="white">
-        warrant required
-      </text>
-
-      <text x={408} y={240} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
-        OWNER SEES BOTH
-      </text>
-    </svg>
+          </div>
+        )}
+      </div>
+      {!isDone && (
+        <div className="flex items-center border-t border-neutral-100">
+          <button
+            type="button"
+            onClick={onReject}
+            className="flex-1 border-r border-neutral-100 py-1.5 font-mono text-[10px] uppercase tracking-widest text-neutral-500 transition-all duration-150 hover:bg-neutral-50 hover:text-black hover:tracking-[0.2em]"
+          >
+            Reject
+          </button>
+          <button
+            type="button"
+            onClick={onReassign}
+            className="flex-1 border-r border-neutral-100 py-1.5 font-mono text-[10px] uppercase tracking-widest text-neutral-500 transition-all duration-150 hover:bg-neutral-50 hover:text-black hover:tracking-[0.2em]"
+          >
+            Reassign
+          </button>
+          <button
+            type="button"
+            onClick={onApprove}
+            className="flex-1 bg-black py-1.5 font-mono text-[10px] uppercase tracking-widest text-white transition-all duration-150 hover:bg-neutral-800 hover:tracking-[0.22em]"
+          >
+            Approve
+          </button>
+        </div>
+      )}
+      {isDone && (
+        <div
+          className={`px-3 py-2 font-mono text-[10px] uppercase tracking-widest ${
+            state === "approved"
+              ? "bg-black text-white"
+              : state === "rejected"
+                ? "bg-neutral-100 text-neutral-500"
+                : "bg-neutral-100 text-neutral-700"
+          }`}
+        >
+          {state === "approved" && `Dispatched · ${officer.split(" · ")[0]}`}
+          {state === "rejected" && "Cancelled · written to memory"}
+          {state === "reassigned" && "Reassignment in flight · countdown reset"}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -1139,7 +1271,7 @@ function Footer() {
     <footer className="px-6 py-6">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
         <span>WatchDog · GStack × GBrain · 2026</span>
-        <span>SFPD pilot build · No real footage stored</span>
+        <span>Live SF data · No persistent video retention</span>
       </div>
     </footer>
   );

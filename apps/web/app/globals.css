@@ -78,6 +78,30 @@ body {
   animation: wd-grid-drift 20s linear infinite;
 }
 
+/* --- Landing diagram interactivity ------------------------------------- */
+/* Dim sibling sources when one is hovered so the active row pops. */
+.wd-diagram-shell svg:hover .wd-fusion-source:not(:hover) {
+  opacity: 0.25;
+}
+.wd-fusion-source { transition: opacity 200ms ease; }
+.wd-fusion-source:hover .wd-fusion-source-chip {
+  fill: #000;
+}
+.wd-fusion-source:hover text { font-weight: 600; }
+.wd-fusion-source:hover .wd-fusion-source-arrow {
+  stroke-width: 2;
+}
+.wd-fusion-source:hover text.wd-fusion-chip-glyph { fill: #fff; }
+
+.wd-diagram-shell svg:hover .wd-memory-chip:not(:hover) {
+  opacity: 0.45;
+}
+.wd-memory-chip { transition: opacity 200ms ease, transform 200ms ease; transform-origin: left center; transform-box: fill-box; }
+.wd-memory-chip:hover { transform: scale(1.04); }
+.wd-memory-chip:hover rect.wd-memory-chip-bg {
+  stroke-width: 2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wd-grid,
   [class*="animate-["],
