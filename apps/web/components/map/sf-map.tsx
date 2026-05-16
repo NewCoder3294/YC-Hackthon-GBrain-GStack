@@ -40,6 +40,16 @@ const TILE_STYLE = {
 };
 
 type StreamFilter = "all" | "hls" | "mjpeg";
+type DispatchPriority = "all" | "high" | "routine";
+
+const HIGH_PRIORITIES = new Set(["A", "B"]);
+
+function callMatchesPriority(call: DispatchCall, filter: DispatchPriority): boolean {
+  if (filter === "all") return true;
+  const p = (call.priority ?? "").toUpperCase();
+  if (filter === "high") return HIGH_PRIORITIES.has(p);
+  return !HIGH_PRIORITIES.has(p);
+}
 
 const SIGNAL_GLYPH: Record<WdSignal["kind"], string> = {
   camera: "■",
@@ -92,11 +102,16 @@ export function SFMap({ cameras }: Props) {
   const [showIncidents, setShowIncidents] = useState(true);
   const [showSignals, setShowSignals] = useState(true);
   const [showDispatch, setShowDispatch] = useState(true);
+  const [dispatchPriority, setDispatchPriority] = useState<DispatchPriority>("all");
   const [selectedCam, setSelectedCam] = useState<CamWithCoords | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<WdIncident | null>(null);
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchCall | null>(null);
 
   const dispatch = useDispatchCalls();
+  const filteredDispatch = useMemo(
+    () => dispatch.calls.filter((c) => callMatchesPriority(c, dispatchPriority)),
+    [dispatch.calls, dispatchPriority],
+  );
 
   const filteredCams = useMemo(
     () => cameras.filter((c) => stream === "all" || c.streamType === stream),
@@ -317,12 +332,13 @@ export function SFMap({ cameras }: Props) {
     }
   }, [showSignals]);
 
-  // Live SF dispatch markers — diff-and-sync against incoming calls.
+  // Live SF dispatch markers — diff-and-sync against the filtered list so
+  // the priority filter directly drives which pins are on the map.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoaded) return;
     const store = dispatchMarkersRef.current;
-    const nextIds = new Set(dispatch.calls.map((c) => c.id));
+    const nextIds = new Set(filteredDispatch.map((c) => c.id));
 
     for (const [id, marker] of store) {
       if (!nextIds.has(id)) {
@@ -331,7 +347,7 @@ export function SFMap({ cameras }: Props) {
       }
     }
 
-    for (const call of dispatch.calls) {
+    for (const call of filteredDispatch) {
       if (store.has(call.id)) continue;
       const el = document.createElement("button");
       el.type = "button";
@@ -353,7 +369,7 @@ export function SFMap({ cameras }: Props) {
         .addTo(map);
       store.set(call.id, marker);
     }
-  }, [dispatch.calls, mapLoaded]);
+  }, [filteredDispatch, mapLoaded]);
 
   // Dispatch visibility toggle.
   useEffect(() => {
@@ -387,6 +403,32 @@ export function SFMap({ cameras }: Props) {
           on={showDispatch}
           onClick={() => setShowDispatch((v) => !v)}
         />
+        <div className="flex">
+          {(["all", "high", "routine"] as DispatchPriority[]).map((opt, i) => (
+            <button
+              key={opt}
+              onClick={() => setDispatchPriority(opt)}
+              disabled={!showDispatch}
+              title={
+                opt === "high"
+                  ? "Priority A + B"
+                  : opt === "routine"
+                    ? "Priority C + E"
+                    : "All dispatch priorities"
+              }
+              className={cn(
+                "h-7 border border-neutral-200 px-2 font-mono text-[10px] uppercase tracking-widest",
+                dispatchPriority === opt
+                  ? "border-black bg-black text-white"
+                  : "bg-white text-black hover:border-black",
+                i > 0 && "border-l-0",
+                !showDispatch && "opacity-40",
+              )}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
         <Divider />
         <div className="flex">
           {(["hls", "mjpeg", "all"] as StreamFilter[]).map((opt, i) => (
@@ -406,8 +448,9 @@ export function SFMap({ cameras }: Props) {
           ))}
         </div>
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          {filteredCams.length} cams · {wdIncidents.length} incidents · {dispatch.calls.length}{" "}
-          dispatch{dispatch.loading ? " (loading)" : ""}
+          {filteredCams.length} cams · {wdIncidents.length} incidents ·{" "}
+          {filteredDispatch.length}/{dispatch.calls.length} dispatch
+          {dispatch.loading ? " (loading)" : ""}
           {dispatch.error ? ` (error: ${dispatch.error})` : ""}
         </span>
       </div>

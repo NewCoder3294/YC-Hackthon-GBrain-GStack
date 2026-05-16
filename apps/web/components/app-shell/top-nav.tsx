@@ -16,7 +16,7 @@ export function TopNav({ email }: { email: string }) {
             className="rounded-sm"
           />
           <span className="font-mono text-sm font-semibold uppercase tracking-[0.2em]">
-            Watchdog
+            WatchDog
           </span>
         </div>
         <nav className="flex items-center gap-0.5">

@@ -4,8 +4,12 @@ import { GeistMono } from "geist/font/mono";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Watchdog",
-  description: "Incident fusion and CCTV monitoring",
+  title: "WatchDog",
+  description: "Real-time crime intelligence for police dispatchers",
+  openGraph: {
+    title: "WatchDog",
+    description: "Real-time crime intelligence for police dispatchers",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

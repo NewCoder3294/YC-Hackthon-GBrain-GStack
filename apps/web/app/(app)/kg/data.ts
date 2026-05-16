@@ -1,6 +1,8 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { KgEdge, KgNode } from "@/components/kg/types";
+import { fetchRecentDispatch } from "@/lib/dispatch-fetch";
+import { isHighPriority, priorityLabel } from "@/lib/dispatch";
 
 interface GangRow {
   id: string;
@@ -77,6 +79,10 @@ function locationLabel(route: string, direction: string | null): string {
   return direction ? `${route} ${direction}` : route;
 }
 
+function neighborhoodId(name: string): string {
+  return `loc:nb:${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+}
+
 function isoToHuman(iso: string | null | undefined): string {
   if (!iso) return "";
   return iso.slice(0, 16).replace("T", " ");
@@ -95,6 +101,7 @@ export async function loadKgFromSupabase(): Promise<{
     arrestsRes,
     alertsRes,
     incidentsRes,
+    dispatchCalls,
   ] = await Promise.all([
     supabase.from("gangs").select("id, name, aliases, color, active, notes"),
     supabase
@@ -123,6 +130,9 @@ export async function loadKgFromSupabase(): Promise<{
       )
       .order("created_at", { ascending: false })
       .limit(40),
+    // Live SF Open Data dispatch (audio readout source). Limited so the
+    // graph stays legible — KG shows the freshest activity at a glance.
+    fetchRecentDispatch({ limit: 30, revalidate: 60 }),
   ]);
 
   const gangs = (gangsRes.data ?? []) as GangRow[];
@@ -256,6 +266,42 @@ export async function loadKgFromSupabase(): Promise<{
         label: "suspect",
       });
     }
+  }
+
+  // Dispatch (audio-readout) nodes from live SFGov data, with seeded
+  // neighborhood location nodes so the graph has place-of-occurrence context.
+  for (const call of dispatchCalls) {
+    const placeName = call.neighborhood || call.district || "SF · unknown area";
+    const locId = neighborhoodId(placeName);
+    if (!seenLocations.has(locId)) {
+      nodes.push({
+        id: locId,
+        kind: "location",
+        label: placeName,
+        sub: "neighborhood (SFGov)",
+        source: "live",
+      });
+      seenLocations.add(locId);
+    }
+    nodes.push({
+      id: `dispatch:${call.id}`,
+      kind: "dispatch",
+      label: `${call.callTypeCode ? `${call.callTypeCode} · ` : ""}${call.callType}`,
+      sub: `${call.address} · ${isoToHuman(call.receivedAt)}`,
+      meta: {
+        priority: priorityLabel(call.priority),
+        callNumber: call.callNumber,
+        agency: call.agency,
+        urgent: isHighPriority(call.priority) ? "yes" : "no",
+      },
+      source: "live",
+    });
+    edges.push({
+      id: `e:loc-dispatch:${call.id}`,
+      source: locId,
+      target: `dispatch:${call.id}`,
+      label: "call",
+    });
   }
 
   for (const a of alerts) {

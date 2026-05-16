@@ -27,9 +27,9 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
   const incident = await getIncident(id);
-  if (!incident) return { title: "Incident not found · Watchdog" };
+  if (!incident) return { title: "Incident not found · WatchDog" };
   return {
-    title: `[${incident.severity.toUpperCase()}] ${incident.title} · Watchdog`,
+    title: `[${incident.severity.toUpperCase()}] ${incident.title} · WatchDog`,
   };
 }
 

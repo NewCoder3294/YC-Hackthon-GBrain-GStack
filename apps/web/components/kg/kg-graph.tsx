@@ -119,6 +119,7 @@ function GraphInner({ nodes, edges }: Props) {
       baseline: 0,
       location: 0,
       decision: 0,
+      dispatch: 0,
     } satisfies Record<KgNodeKind, number>;
     for (const n of nodes) out[n.kind]++;
     return out;

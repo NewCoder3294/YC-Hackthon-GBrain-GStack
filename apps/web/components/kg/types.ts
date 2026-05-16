@@ -8,7 +8,8 @@ export type KgNodeKind =
   | "pattern"
   | "baseline"
   | "location"
-  | "decision";
+  | "decision"
+  | "dispatch";
 
 export interface KgNode {
   id: string;
@@ -37,6 +38,7 @@ export const KIND_LABEL: Record<KgNodeKind, string> = {
   baseline: "Baseline",
   location: "Location",
   decision: "Decision",
+  dispatch: "Dispatch",
 };
 
 // Display order in toolbar (groups: people → places → events → analysis)
@@ -46,6 +48,7 @@ export const KIND_ORDER: KgNodeKind[] = [
   "territory",
   "arrest",
   "location",
+  "dispatch",
   "incident",
   "alert",
   "decision",
@@ -60,6 +63,7 @@ export const KIND_COLUMN: Record<KgNodeKind, number> = {
   territory: 1,
   arrest: 2,
   location: 2,
+  dispatch: 3,
   incident: 3,
   alert: 4,
   decision: 5,
