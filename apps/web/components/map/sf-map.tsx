@@ -365,7 +365,15 @@ export function SFMap({ cameras }: Props) {
       el.dataset.priority = call.priority || "?";
       el.setAttribute("aria-label", `${call.callType} at ${call.address}`);
       el.title = `${call.priority || "?"} · ${call.callType} · ${call.address}`;
-      el.textContent = call.priority?.toUpperCase() || "•";
+      // Inner span holds all visuals + hover transition. The outer button
+      // is positioning-only so MapLibre's per-frame transform updates
+      // (during pan/zoom) snap instantly instead of being interpolated by
+      // a CSS transition on transform — which is what made the markers
+      // appear to "float" away from their pinned location while panning.
+      const inner = document.createElement("span");
+      inner.className = "wd-dispatch-marker-inner";
+      inner.textContent = call.priority?.toUpperCase() || "•";
+      el.appendChild(inner);
       el.addEventListener("click", (ev) => {
         ev.stopPropagation();
         setSelectedDispatch(call);
@@ -632,13 +640,30 @@ export function SFMap({ cameras }: Props) {
           background: #000;
           color: #fff;
         }
+        /* Outer button: positioning only. MapLibre rewrites this
+           element's transform every animation frame during pan/zoom, so
+           NOTHING on this selector is allowed to transition or animate
+           the transform property. Otherwise the marker visibly lags
+           behind its pinned coordinate. */
         .wd-dispatch-marker {
+          display: block;
+          padding: 0;
+          margin: 0;
+          border: 0;
+          background: transparent;
+          cursor: pointer;
+          line-height: 0;
+          width: 20px;
+          height: 20px;
+        }
+        /* Inner span: all the visuals + hover scale live here. MapLibre
+           never touches this element, so transform transitions are safe. */
+        .wd-dispatch-marker-inner {
           display: flex;
           align-items: center;
           justify-content: center;
           width: 20px;
           height: 20px;
-          padding: 0;
           border-radius: 9999px;
           border: 2px solid #fff;
           background: #000;
@@ -647,14 +672,14 @@ export function SFMap({ cameras }: Props) {
           font-size: 10px;
           font-weight: 700;
           line-height: 1;
-          cursor: pointer;
           box-shadow: 0 0 0 1px #000;
           transition: transform 120ms ease;
+          will-change: transform;
         }
-        .wd-dispatch-marker:hover {
+        .wd-dispatch-marker:hover .wd-dispatch-marker-inner {
           transform: scale(1.18);
         }
-        .wd-dispatch-marker-high {
+        .wd-dispatch-marker-high .wd-dispatch-marker-inner {
           animation: wd-dispatch-pulse 1.4s ease-in-out infinite;
         }
         @keyframes wd-dispatch-pulse {
