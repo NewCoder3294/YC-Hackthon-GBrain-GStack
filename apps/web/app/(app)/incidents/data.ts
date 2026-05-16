@@ -2,6 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { IncidentDetail, IncidentFilters, IncidentRow, Severity } from "./types";
 
+export { thumbnailUrl } from "./thumbnail-url";
+
 interface ClipRow {
   id: string;
   camera_id: string;
@@ -13,6 +15,8 @@ interface ClipRow {
     route: string;
     direction: string | null;
     description: string;
+    stream_url: string;
+    stream_type: "hls" | "mjpeg";
   } | null;
   clip_tags: { tag: string }[];
 }
@@ -27,7 +31,7 @@ interface IncidentResponse {
 }
 
 const CLIP_SELECT =
-  "id, camera_id, started_at, duration_s, thumbnail_path, storage_path, cameras (route, direction, description), clip_tags (tag)";
+  "id, camera_id, started_at, duration_s, thumbnail_path, storage_path, cameras (route, direction, description, stream_url, stream_type), clip_tags (tag)";
 
 function toClip(c: ClipRow) {
   return {
@@ -42,6 +46,8 @@ function toClip(c: ClipRow) {
           route: c.cameras.route,
           direction: c.cameras.direction,
           description: c.cameras.description,
+          streamUrl: c.cameras.stream_url,
+          streamType: c.cameras.stream_type,
         }
       : null,
     tags: c.clip_tags.map((t) => t.tag),
@@ -159,10 +165,3 @@ export async function getClipSignedUrl(
   return data?.signedUrl ?? null;
 }
 
-export function thumbnailUrl(thumbnailPath: string): string {
-  if (!thumbnailPath) return "";
-  if (thumbnailPath.startsWith("http")) return thumbnailPath;
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, "");
-  if (!base) return "";
-  return `${base}/storage/v1/object/public/thumbnails/${thumbnailPath}`;
-}

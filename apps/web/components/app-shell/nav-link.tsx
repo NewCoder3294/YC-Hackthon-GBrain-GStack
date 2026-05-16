@@ -8,22 +8,23 @@ import clsx from "clsx";
 interface Props {
   href: Route;
   label: string;
-  shortcut: string;
 }
 
-export function NavLink({ href, label, shortcut }: Props) {
+export function NavLink({ href, label }: Props) {
   const pathname = usePathname();
   const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={clsx(
-        "flex items-center gap-2 border-b-2 px-3 py-3 font-mono text-xs uppercase tracking-widest",
-        active ? "border-black text-black" : "border-transparent text-neutral-500 hover:text-black",
+        "inline-flex items-center rounded-md px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors duration-150",
+        active
+          ? "bg-black text-white"
+          : "text-neutral-500 hover:bg-neutral-100 hover:text-black",
       )}
     >
-      <span>{label}</span>
-      <span className="text-[10px] text-neutral-300">{shortcut}</span>
+      {label}
     </Link>
   );
 }

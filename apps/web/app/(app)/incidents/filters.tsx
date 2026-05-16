@@ -3,14 +3,15 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useTransition } from "react";
 import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 
 interface Props {
   routes: string[];
   tags: string[];
 }
 
-const SEVERITIES = [
-  { value: "", label: "All severities" },
+const SEVERITY_OPTIONS = [
+  { value: "", label: "Any" },
   { value: "low", label: "Low" },
   { value: "med", label: "Med" },
   { value: "high", label: "High" },
@@ -49,6 +50,22 @@ export function IncidentFilters({ routes, tags }: Props) {
     [params],
   );
 
+  const routeOptions = useMemo(
+    () => [
+      { value: "", label: "Any" },
+      ...sortRoutes(routes).map((r) => ({ value: r, label: r })),
+    ],
+    [routes],
+  );
+
+  const tagOptions = useMemo(
+    () => [
+      { value: "", label: "Any" },
+      ...tags.map((t) => ({ value: t, label: t })),
+    ],
+    [tags],
+  );
+
   return (
     <div
       className="flex flex-wrap items-end gap-3 border-b border-neutral-200 bg-white p-4"
@@ -82,26 +99,30 @@ export function IncidentFilters({ routes, tags }: Props) {
       </FilterField>
 
       <FilterField label="Route">
-        <Select
+        <Combobox
           value={get("route")}
           onChange={(v) => update({ route: v })}
-          options={[{ value: "", label: "Any" }, ...routes.map((r) => ({ value: r, label: r }))]}
+          options={routeOptions}
+          triggerLabel="Filter by route"
         />
       </FilterField>
 
       <FilterField label="Tag">
-        <Select
+        <Combobox
           value={get("tag")}
           onChange={(v) => update({ tag: v })}
-          options={[{ value: "", label: "Any" }, ...tags.map((t) => ({ value: t, label: t }))]}
+          options={tagOptions}
+          triggerLabel="Filter by tag"
         />
       </FilterField>
 
       <FilterField label="Severity">
-        <Select
+        <Combobox
           value={get("severity")}
           onChange={(v) => update({ severity: v })}
-          options={SEVERITIES}
+          options={SEVERITY_OPTIONS}
+          searchable={false}
+          triggerLabel="Filter by severity"
         />
       </FilterField>
 
@@ -137,26 +158,24 @@ function FilterField({
   );
 }
 
-function Select({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="h-8 min-w-[8rem] border border-neutral-200 bg-white px-2 font-mono text-xs focus:border-black focus:outline-none"
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
-  );
+const ROUTE_PREFIX_ORDER: Record<string, number> = {
+  "I-": 0,
+  "US-": 1,
+  "SR-": 2,
+};
+
+function sortRoutes(routes: string[]): string[] {
+  return [...routes].sort((a, b) => {
+    const ap = a.slice(0, a.indexOf("-") + 1);
+    const bp = b.slice(0, b.indexOf("-") + 1);
+    const aw = ROUTE_PREFIX_ORDER[ap] ?? 99;
+    const bw = ROUTE_PREFIX_ORDER[bp] ?? 99;
+    if (aw !== bw) return aw - bw;
+    const an = Number(a.split("-")[1] ?? 0);
+    const bn = Number(b.split("-")[1] ?? 0);
+    if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) {
+      return an - bn;
+    }
+    return a.localeCompare(b);
+  });
 }

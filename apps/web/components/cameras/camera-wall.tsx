@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CameraTile, type CameraTileData } from "./camera-tile";
+import { useCallback, useMemo, useState } from "react";
+import { CameraTile, type CameraTileData, type CameraStatus } from "./camera-tile";
+import { RouteCombobox } from "./route-combobox";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -9,39 +10,63 @@ interface Props {
 }
 
 const GRID_OPTIONS = [
-  { label: "3", cols: "grid-cols-3", cap: 9 },
-  { label: "4", cols: "grid-cols-4", cap: 16 },
-  { label: "5", cols: "grid-cols-5", cap: 25 },
-  { label: "6", cols: "grid-cols-6", cap: 36 },
+  { label: "3", cols: "grid-cols-2 md:grid-cols-3" },
+  { label: "4", cols: "grid-cols-2 md:grid-cols-3 lg:grid-cols-4" },
+  { label: "5", cols: "grid-cols-2 md:grid-cols-3 lg:grid-cols-5" },
+  { label: "6", cols: "grid-cols-2 md:grid-cols-4 lg:grid-cols-6" },
 ] as const;
 
 type StreamFilter = "all" | "hls" | "mjpeg";
 
+const PAGE_SIZE = 60;
+
 export function CameraWall({ cameras }: Props) {
   const [grid, setGrid] = useState<(typeof GRID_OPTIONS)[number]>(GRID_OPTIONS[1]);
-  const [route, setRoute] = useState<string>("all");
+  const [route, setRoute] = useState<string>("ALL");
   const [stream, setStream] = useState<StreamFilter>("hls");
   const [query, setQuery] = useState("");
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [hideOffline, setHideOffline] = useState(true);
+  const [offlineIds, setOfflineIds] = useState<Set<string>>(() => new Set());
+
+  const reportStatus = useCallback((id: string, status: CameraStatus) => {
+    setOfflineIds((prev) => {
+      const has = prev.has(id);
+      if (status === "offline" && !has) {
+        const next = new Set(prev);
+        next.add(id);
+        return next;
+      }
+      if (status === "live" && has) {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      }
+      return prev;
+    });
+  }, []);
 
   const routes = useMemo(() => {
     const set = new Set<string>();
     for (const c of cameras) set.add(c.route);
-    return ["all", ...Array.from(set).sort()];
+    return ["ALL", ...Array.from(set).sort()];
   }, [cameras]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return cameras
       .filter((c) => stream === "all" || c.streamType === stream)
-      .filter((c) => route === "all" || c.route === route)
+      .filter((c) => route === "ALL" || c.route === route)
       .filter(
         (c) =>
           !q ||
           c.description.toLowerCase().includes(q) ||
           c.route.toLowerCase().includes(q),
       )
-      .slice(0, grid.cap);
-  }, [cameras, stream, route, query, grid.cap]);
+      .filter((c) => !hideOffline || !offlineIds.has(c.id));
+  }, [cameras, stream, route, query, hideOffline, offlineIds]);
+
+  const visible = filtered.slice(0, visibleCount);
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -77,7 +102,10 @@ export function CameraWall({ cameras }: Props) {
             {(["hls", "mjpeg", "all"] as StreamFilter[]).map((opt, i) => (
               <button
                 key={opt}
-                onClick={() => setStream(opt)}
+                onClick={() => {
+                  setStream(opt);
+                  setVisibleCount(PAGE_SIZE);
+                }}
                 className={cn(
                   "h-7 border border-neutral-200 px-2 font-mono text-xs uppercase",
                   stream === opt
@@ -92,22 +120,28 @@ export function CameraWall({ cameras }: Props) {
           </div>
         </label>
 
-        <label className="flex items-center gap-2">
-          <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-            Route
-          </span>
-          <select
-            value={route}
-            onChange={(e) => setRoute(e.target.value)}
-            className="h-7 border border-neutral-200 bg-white px-2 font-mono text-xs uppercase focus:border-black focus:outline-none"
-          >
-            {routes.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </label>
+        <RouteCombobox
+          value={route}
+          options={routes}
+          onChange={(v) => {
+            setRoute(v);
+            setVisibleCount(PAGE_SIZE);
+          }}
+        />
+
+        <button
+          onClick={() => setHideOffline((v) => !v)}
+          className={cn(
+            "flex h-7 items-center gap-1.5 border px-2 font-mono text-xs uppercase",
+            hideOffline
+              ? "border-black bg-black text-white"
+              : "border-neutral-200 bg-white text-neutral-500 hover:border-black hover:text-black",
+          )}
+          title="Hide cameras reporting no signal"
+        >
+          <span className={cn("h-1.5 w-1.5", hideOffline ? "bg-white" : "bg-neutral-300")} />
+          Offline
+        </button>
 
         <label className="ml-auto flex items-center gap-2">
           <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
@@ -115,20 +149,28 @@ export function CameraWall({ cameras }: Props) {
           </span>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setVisibleCount(PAGE_SIZE);
+            }}
             placeholder="street / route"
             className="h-7 w-56 border border-neutral-200 bg-white px-2 font-mono text-xs placeholder:text-neutral-300 focus:border-black focus:outline-none"
           />
         </label>
 
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          {filtered.length} / {cameras.length}
+          {visible.length} / {filtered.length} shown · {offlineIds.size} offline ·{" "}
+          {cameras.length} total
         </span>
       </div>
 
       <div className={cn("grid gap-2", grid.cols)}>
-        {filtered.map((c) => (
-          <CameraTile key={c.id} camera={c} />
+        {visible.map((c) => (
+          <CameraTile
+            key={c.id}
+            camera={c}
+            onStatusChange={(s) => reportStatus(c.id, s)}
+          />
         ))}
       </div>
 
@@ -136,6 +178,15 @@ export function CameraWall({ cameras }: Props) {
         <p className="border border-dashed border-neutral-200 p-12 text-center font-mono text-xs text-neutral-500">
           No cameras match these filters.
         </p>
+      )}
+
+      {visibleCount < filtered.length && (
+        <button
+          onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+          className="self-center border border-black bg-white px-4 py-2 font-mono text-xs uppercase tracking-widest hover:bg-black hover:text-white"
+        >
+          Show more · {filtered.length - visibleCount} remaining
+        </button>
       )}
     </div>
   );

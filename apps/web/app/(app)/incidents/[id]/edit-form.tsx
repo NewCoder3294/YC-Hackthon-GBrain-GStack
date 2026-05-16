@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { deleteIncident, updateIncident } from "../actions";
 import type { Severity } from "../types";
@@ -35,6 +34,8 @@ export function EditIncidentForm({
     notes !== initialNotes ||
     severity !== initialSeverity;
 
+  const onSaveRef = useRef<() => void>(() => {});
+
   function onSave() {
     setError(null);
     setSaved(false);
@@ -52,6 +53,26 @@ export function EditIncidentForm({
       }
     });
   }
+
+  onSaveRef.current = onSave;
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        onSaveRef.current();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!saved) return;
+    const id = setTimeout(() => setSaved(false), 2000);
+    return () => clearTimeout(id);
+  }, [saved]);
 
   function onDelete() {
     if (!confirm("Delete this incident? Clips will remain but unlinked.")) {
@@ -74,10 +95,15 @@ export function EditIncidentForm({
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           Title
         </span>
-        <Input
+        <textarea
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="mt-1"
+          rows={2}
+          spellCheck={false}
+          data-gramm="false"
+          data-gramm_editor="false"
+          data-enable-grammarly="false"
+          className="mt-1 w-full resize-y border border-neutral-200 bg-white px-3 py-2 font-mono text-sm leading-snug focus:border-black focus:outline-none"
         />
       </label>
 
@@ -114,6 +140,10 @@ export function EditIncidentForm({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={6}
+          spellCheck={false}
+          data-gramm="false"
+          data-gramm_editor="false"
+          data-enable-grammarly="false"
           className="mt-1 w-full resize-y border border-neutral-200 bg-white p-3 font-mono text-sm leading-relaxed focus:border-black focus:outline-none"
           placeholder="Observed plate, time of event, follow-up actions…"
         />
@@ -128,7 +158,7 @@ export function EditIncidentForm({
         </p>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
         <Button
           type="button"
           onClick={onSave}
@@ -136,11 +166,23 @@ export function EditIncidentForm({
         >
           {pending ? "Saving…" : "Save changes"}
         </Button>
+        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-300">
+          {dirty ? "⌘S to save" : ""}
+        </span>
+      </div>
+
+      <div className="mt-8 border-t border-neutral-200 pt-6">
+        <h2 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+          Danger zone
+        </h2>
+        <p className="mt-1 font-mono text-[10px] text-neutral-300">
+          Deleting an incident unlinks its clips. The clips remain in storage.
+        </p>
         <button
           type="button"
           onClick={onDelete}
           disabled={pending}
-          className="font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black disabled:opacity-40"
+          className="mt-3 border border-neutral-300 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-black hover:border-black hover:bg-black hover:text-white disabled:opacity-40"
         >
           Delete incident
         </button>

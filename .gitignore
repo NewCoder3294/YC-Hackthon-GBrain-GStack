@@ -9,6 +9,7 @@ dist
 coverage
 .vercel
 *.tsbuildinfo
+.gstack/
 
 # Hour-0 probe artifact — TS pipeline uses transformers.js, not Python weights
 yolov8n.pt

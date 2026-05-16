@@ -1,10 +1,11 @@
 import Link from "next/link";
+import type { Route } from "next";
 import {
   listDistinctRoutes,
   listDistinctTags,
   listIncidents,
-  thumbnailUrl,
 } from "./data";
+import { ClipThumbnail } from "./clip-thumbnail";
 import { IncidentFilters } from "./filters";
 import { SeverityBadge } from "./severity-badge";
 import type { IncidentFilters as Filters, Severity } from "./types";
@@ -105,27 +106,21 @@ export default async function IncidentsPage({ searchParams }: PageProps) {
                   >
                     <Td>
                       <Link
-                        href={`/incidents/${row.id}`}
+                        href={`/incidents/${row.id}` as Route}
                         className="block"
                         aria-label={`Open incident ${row.title}`}
                       >
-                        {clip?.thumbnailPath ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={thumbnailUrl(clip.thumbnailPath)}
-                            alt=""
-                            className="h-12 w-20 border border-neutral-200 object-cover grayscale"
-                          />
-                        ) : (
-                          <div className="flex h-12 w-20 items-center justify-center border border-neutral-200 bg-neutral-50 font-mono text-[10px] uppercase text-neutral-300">
-                            no clip
-                          </div>
-                        )}
+                        <ClipThumbnail
+                          path={clip?.thumbnailPath}
+                          fallbackStreamUrl={cam?.streamUrl ?? null}
+                          fallbackStreamType={cam?.streamType ?? null}
+                          showLiveDot
+                        />
                       </Link>
                     </Td>
                     <Td>
                       <Link
-                        href={`/incidents/${row.id}`}
+                        href={`/incidents/${row.id}` as Route}
                         className="block font-mono text-xs"
                       >
                         <div className="text-black">{row.title}</div>

@@ -17,6 +17,8 @@ export interface IncidentRow {
       route: string;
       direction: string | null;
       description: string;
+      streamUrl: string;
+      streamType: "hls" | "mjpeg";
     } | null;
     tags: string[];
   } | null;
