@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Hls from "hls.js";
+import type Hls from "hls.js";
 import { cn } from "@/lib/utils";
 
 export interface CameraTileData {
@@ -52,7 +52,8 @@ export function CameraTile({ camera, onStatusChange }: Props) {
     return () => obs.disconnect();
   }, []);
 
-  // HLS attach
+  // HLS attach — hls.js is dynamically imported so the ~150 KB bundle
+  // doesn't block first paint of the wall.
   useEffect(() => {
     if (!inView || camera.streamType !== "hls" || !videoRef.current) return;
     const video = videoRef.current;
@@ -78,24 +79,35 @@ export function CameraTile({ camera, onStatusChange }: Props) {
 
     const proxied = `/api/hls?url=${encodeURIComponent(camera.streamUrl)}`;
 
-    if (Hls.isSupported()) {
-      hls = new Hls({ lowLatencyMode: true, maxBufferLength: 4 });
-      hls.loadSource(proxied);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, markLive);
-      hls.on(Hls.Events.FRAG_LOADED, markLive);
-      hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) markOffline();
-      });
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari path — native HLS, no library needed.
       video.src = proxied;
       video.addEventListener("loadedmetadata", markLive);
       video.addEventListener("error", markOffline);
+      video.play().catch(() => {});
     } else {
-      markOffline();
+      // Other browsers — load hls.js lazily.
+      import("hls.js")
+        .then(({ default: HlsLib }) => {
+          if (cancelled) return;
+          if (!HlsLib.isSupported()) {
+            markOffline();
+            return;
+          }
+          hls = new HlsLib({ lowLatencyMode: true, maxBufferLength: 4 });
+          hls.loadSource(proxied);
+          hls.attachMedia(video);
+          hls.on(HlsLib.Events.MANIFEST_PARSED, markLive);
+          hls.on(HlsLib.Events.FRAG_LOADED, markLive);
+          hls.on(HlsLib.Events.ERROR, (_e, data) => {
+            if (data.fatal) markOffline();
+          });
+          video.play().catch(() => {});
+        })
+        .catch(() => {
+          if (!cancelled) markOffline();
+        });
     }
-
-    video.play().catch(() => {});
 
     return () => {
       cancelled = true;

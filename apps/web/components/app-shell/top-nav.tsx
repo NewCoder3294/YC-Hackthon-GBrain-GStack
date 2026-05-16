@@ -2,7 +2,7 @@ import type { Route } from "next";
 import Image from "next/image";
 import { NavLink } from "./nav-link";
 
-export function TopNav({ email }: { email: string }) {
+export function TopNav() {
   return (
     <header className="flex h-12 items-center justify-between border-b border-neutral-200 px-4">
       <div className="flex items-center gap-6">
@@ -20,13 +20,15 @@ export function TopNav({ email }: { email: string }) {
           </span>
         </div>
         <nav className="flex items-center gap-0.5">
-          <NavLink href={"/" as Route} label="Wall" />
+          <NavLink href={"/wall" as Route} label="Wall" />
           <NavLink href={"/map" as Route} label="Map" />
           <NavLink href={"/kg" as Route} label="Knowledge Graph" />
           <NavLink href={"/incidents" as Route} label="Incidents" />
         </nav>
       </div>
-      <span className="font-mono text-xs text-neutral-500">{email}</span>
+      <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-300">
+        Open demo · no sign-in
+      </span>
     </header>
   );
 }
