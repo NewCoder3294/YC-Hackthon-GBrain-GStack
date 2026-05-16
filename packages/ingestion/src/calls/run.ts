@@ -21,6 +21,7 @@
  * summarize.ts / scenarios.ts.
  */
 
+import "../load-env";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 import { dbFromEnv } from "../db";

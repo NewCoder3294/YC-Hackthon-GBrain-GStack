@@ -12,13 +12,14 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "camera": "tsx --env-file=../../apps/web/.env.local src/camera/run.ts",
-    "calls": "tsx --env-file=../../apps/web/.env.local src/calls/run.ts"
+    "camera": "tsx src/camera/run.ts",
+    "calls": "tsx src/calls/run.ts"
   },
   "dependencies": {
     "@caltrans/db": "workspace:*",
     "@anthropic-ai/sdk": "^0.32.0",
     "@huggingface/transformers": "^3.0.0",
+    "dotenv": "^16.4.5",
     "drizzle-orm": "^0.36.0",
     "zod": "^3.23.0"
   },

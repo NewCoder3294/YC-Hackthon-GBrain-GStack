@@ -17,6 +17,7 @@
  *   FFMPEG_PATH     ffmpeg binary override (see frame.ts)
  */
 
+import "../load-env";
 import type { Db } from "@caltrans/db";
 import { createLogger, type Logger } from "../logger";
 import { dbFromEnv } from "../db";
