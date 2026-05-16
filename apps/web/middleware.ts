@@ -49,9 +49,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // `report` + `api/report` bypass auth: the citizen incident-report flow
-  // is intentionally anonymous (TRD §2), same exemption pattern as api/cron.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/cron|api/hls|api/dispatch|api/openclaw|report|api/report|.*\\.[a-zA-Z0-9]+$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/cron|api/hls|api/dispatch|api/openclaw|.*\\.[a-zA-Z0-9]+$).*)",
   ],
 };
