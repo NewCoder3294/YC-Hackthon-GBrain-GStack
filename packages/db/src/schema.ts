@@ -8,6 +8,8 @@ import {
   boolean,
   timestamp,
   primaryKey,
+  jsonb,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const cameras = pgTable("cameras", {
@@ -26,6 +28,9 @@ export const cameras = pgTable("cameras", {
   lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  contributorId: uuid("contributor_id").references(() => contributors.id, {
+    onDelete: "cascade",
+  }),
 });
 
 export const incidents = pgTable("incidents", {
@@ -89,3 +94,48 @@ export type Camera = typeof cameras.$inferSelect;
 export type NewCamera = typeof cameras.$inferInsert;
 export type Incident = typeof incidents.$inferSelect;
 export type Clip = typeof clips.$inferSelect;
+
+export const contributors = pgTable("contributors", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  contactPhone: text("contact_phone").notNull().unique(),
+  contactEmail: text("contact_email"),
+  token: text("token").notNull().unique(),
+  verificationCode: text("verification_code"),
+  verificationExpiresAt: timestamp("verification_expires_at", { withTimezone: true }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  hoursJson: jsonb("hours_json"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  removedAt: timestamp("removed_at", { withTimezone: true }),
+});
+
+export const contributorNotifications = pgTable(
+  "contributor_notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contributorId: uuid("contributor_id")
+      .notNull()
+      .references(() => contributors.id, { onDelete: "cascade" }),
+    incidentId: uuid("incident_id")
+      .notNull()
+      .references(() => incidents.id, { onDelete: "cascade" }),
+    channel: text("channel", { enum: ["sms", "email", "log"] }).notNull(),
+    body: text("body").notNull(),
+    status: text("status", { enum: ["queued", "sent", "failed"] })
+      .notNull()
+      .default("queued"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    uniquePerIncident: uniqueIndex("contributor_notifications_unique_per_incident").on(
+      t.contributorId,
+      t.incidentId,
+    ),
+  }),
+);
+
+export type Contributor = typeof contributors.$inferSelect;
+export type NewContributor = typeof contributors.$inferInsert;
+export type ContributorNotification = typeof contributorNotifications.$inferSelect;
