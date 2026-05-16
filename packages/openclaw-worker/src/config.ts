@@ -7,13 +7,18 @@ import { z } from "zod";
  * pointed at staging.
  *
  * Worker modes:
- *   `scripted` — fire pre-authored scenarios on `INTERVAL_S`. Demo-safe;
- *                works even if the ingestion package isn't producing
- *                signals. Default.
- *   `fusion`   — read recent `signal_events` and emit one incident per
- *                spatial+temporal cluster that hasn't been seen before.
- *   `both`     — fusion when there's eligible signals, scripted as
- *                a fallback so the dispatcher view is never quiet on stage.
+ *   `fusion` (default) — read recent `signal_events` and emit one incident
+ *                per spatial+temporal cluster that hasn't been seen before.
+ *                The "moving forward" mode. If signal_events is empty,
+ *                the worker idles silently — which is correct: nothing to
+ *                report when nothing is happening.
+ *   `scripted` — fire pre-authored scenarios on `INTERVAL_S`. Kept as an
+ *                explicit opt-in for offline dev only. Do NOT run this in
+ *                shared environments; the dispatcher view should reflect
+ *                real ingestion only.
+ *   `both`     — fusion first; scripted only if fusion produces nothing.
+ *                Useful while bootstrapping the ingestion pipeline. Same
+ *                opt-in warning as `scripted`.
  */
 const configSchema = z.object({
   DATABASE_URL: z.string().min(1),
@@ -22,7 +27,7 @@ const configSchema = z.object({
     .url()
     .default("http://localhost:3000/api/openclaw/ingest"),
   CRON_SECRET: z.string().min(1),
-  WORKER_MODE: z.enum(["scripted", "fusion", "both"]).default("scripted"),
+  WORKER_MODE: z.enum(["scripted", "fusion", "both"]).default("fusion"),
   INTERVAL_S: z.coerce.number().int().positive().default(45),
   FUSION_WINDOW_S: z.coerce.number().int().positive().default(90),
   FUSION_RADIUS_M: z.coerce.number().int().positive().default(300),
