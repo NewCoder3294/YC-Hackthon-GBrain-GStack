@@ -122,7 +122,10 @@ describe("aggregate", () => {
     ];
     const { disparity } = aggregate(rows, NOW);
     expect(disparity.byVolume[0]!.neighborhood).toBe("HighVol");
-    expect(disparity.byClearance[0]!.neighborhood).toBe("LowVol");
+    // byClearance ascending = lowest clearance first (equity lens;
+    // pages.ts reads [0] as "Lowest clearance"). HighVol = 0% cleared.
+    expect(disparity.byClearance[0]!.neighborhood).toBe("HighVol");
+    expect(disparity.byClearance[0]!.rate).toBe(0);
     expect(disparity.volumeSpreadRatio).toBe(5); // 10 / 2
   });
 });
