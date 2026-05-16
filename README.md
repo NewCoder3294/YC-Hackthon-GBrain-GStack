@@ -1,33 +1,60 @@
 # CalTrans CCTV Dashboard
 
-## One-time Supabase setup
+Bay Area (CalTrans District 4) CCTV monitoring + incident clipping dashboard.
 
-1. Create a new project at https://supabase.com (region: us-west).
-2. From the project Settings → Database → Connection string, copy the **Transaction Pooler** URL → `DATABASE_URL`.
-3. From Settings → API, copy:
-   - Project URL → `NEXT_PUBLIC_SUPABASE_URL`
-   - `anon` public key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `service_role` key → `SUPABASE_SERVICE_ROLE_KEY` (server-only, never expose)
-4. Create a Storage bucket named `clips` (private). Add a second bucket `thumbnails` (public).
-5. Apply migrations:
+- **Design spec:** `docs/superpowers/specs/2026-05-16-caltrans-cctv-dashboard-design.md`
+- **P1 plan (this one):** `docs/superpowers/plans/2026-05-16-p1-foundation.md`
+
+## Stack
+
+- Next.js 15 (App Router) + React 19, TypeScript strict
+- Tailwind v4 (monochrome tokens), shadcn/ui
+- Supabase (Postgres + Storage + Auth)
+- Drizzle ORM
+- pnpm workspaces + Turborepo
+- Vercel deploy + Vercel Cron
+
+## Workspace layout
+
+```
+apps/web         Next.js app
+packages/db      Drizzle schema + typed client
+packages/sync    CalTrans catalog parser + upsert
+```
+
+## First-time setup
+
+1. Create Supabase project. Copy URL + anon key + service role + connection string.
+2. Storage: create `clips` (private) and `thumbnails` (public) buckets.
+3. `cp apps/web/.env.example apps/web/.env.local` and fill in values.
+4. Apply migrations:
    ```bash
-   DATABASE_URL=... pnpm db:migrate
+   DATABASE_URL="<pooler-url>" pnpm db:migrate
    ```
-6. Generate a strong CRON secret: `openssl rand -hex 32` → `CRON_SECRET`.
+5. Seed cameras (manual trigger):
+   ```bash
+   curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/sync-cameras
+   ```
 
-## Local development
-
-```bash
-cp apps/web/.env.example apps/web/.env.local
-# fill in values from Supabase
-pnpm dev
-```
-
-## Manual sync trigger
+## Dev
 
 ```bash
-curl -H "Authorization: Bearer $CRON_SECRET" \
-  http://localhost:3000/api/cron/sync-cameras
+pnpm dev          # all packages
+pnpm test         # vitest
+pnpm typecheck    # tsc --noEmit across workspace
+pnpm build        # production build
 ```
 
-Expected JSON: `{ "count": <int>, "syncedAt": "<iso>" }`
+## Parallel phases (after P1 lands)
+
+- **P2 — Live Wall** — `apps/web/app/(app)/page.tsx`, grid view + players
+- **P3 — Buffer + Clipping** — `apps/web/lib/buffer/*`, MediaRecorder + IndexedDB
+- **P4 — Map** — `apps/web/app/(app)/map/page.tsx`, MapLibre
+- **P5 — Incidents** — `apps/web/app/(app)/incidents/*`, table + detail
+- **P6 — Polish** — keyboard shortcuts, perf, error states
+
+Each phase has its own plan file in `docs/superpowers/plans/`.
+
+## Aesthetic
+
+Pure black and white. No color. Status uses iconography, weight, and motion — never hue. See the design spec § "Aesthetic Spec" for the full token set.
