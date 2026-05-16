@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getClipSignedUrl, getIncident, thumbnailUrl } from "../data";
+import { getClipSignedUrl, getIncident } from "../data";
+import { ClipThumbnail } from "../clip-thumbnail";
+import { LiveMjpeg } from "../live-mjpeg";
+import { thumbnailUrl } from "../thumbnail-url";
 import { SeverityBadge } from "../severity-badge";
 import { EditIncidentForm } from "./edit-form";
 import { TagEditor } from "./tag-editor";
@@ -64,6 +67,8 @@ export default async function IncidentDetailPage({ params }: PageProps) {
                   : "Camera deleted"
               }
               fallbackThumbnail={primary.thumbnailPath}
+              liveStreamUrl={primary.camera?.streamUrl ?? null}
+              liveStreamType={primary.camera?.streamType ?? null}
             />
           ) : (
             <div className="flex h-64 items-center justify-center border border-dashed border-neutral-200 font-mono text-xs text-neutral-300">
@@ -82,16 +87,7 @@ export default async function IncidentDetailPage({ params }: PageProps) {
                     key={c.id}
                     className="overflow-hidden border border-neutral-200"
                   >
-                    {c.thumbnailPath ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={thumbnailUrl(c.thumbnailPath)}
-                        alt=""
-                        className="aspect-video w-full object-cover grayscale"
-                      />
-                    ) : (
-                      <div className="aspect-video w-full bg-neutral-50" />
-                    )}
+                    <ClipThumbnail path={c.thumbnailPath} aspect="video" />
                     <div className="p-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
                       <div className="text-black">
                         {c.camera?.route ?? "—"}{" "}
@@ -160,13 +156,20 @@ function ClipViewer({
   durationS,
   cameraLabel,
   fallbackThumbnail,
+  liveStreamUrl,
+  liveStreamType,
 }: {
   signedUrl: string | null;
   startedAt: string;
   durationS: number;
   cameraLabel: string;
   fallbackThumbnail: string;
+  liveStreamUrl: string | null;
+  liveStreamType: "hls" | "mjpeg" | null;
 }) {
+  const showLiveMjpeg =
+    !signedUrl && liveStreamType === "mjpeg" && !!liveStreamUrl;
+
   return (
     <div className="space-y-3">
       <div className="relative aspect-video w-full overflow-hidden border border-neutral-200 bg-black">
@@ -178,23 +181,27 @@ function ClipViewer({
             poster={fallbackThumbnail ? thumbnailUrl(fallbackThumbnail) : undefined}
             className="h-full w-full"
           />
-        ) : fallbackThumbnail ? (
-          /* eslint-disable-next-line @next/next/no-img-element */
-          <img
-            src={thumbnailUrl(fallbackThumbnail)}
-            alt=""
-            className="h-full w-full object-cover grayscale"
-          />
+        ) : showLiveMjpeg ? (
+          <LiveMjpeg streamUrl={liveStreamUrl!} />
         ) : (
-          <div className="flex h-full w-full items-center justify-center font-mono text-xs uppercase tracking-widest text-neutral-500">
-            Clip unavailable
-          </div>
+          <ClipThumbnail
+            path={fallbackThumbnail}
+            aspect="video"
+            label={
+              liveStreamType === "hls"
+                ? "Clip pending — live HLS feed available on Wall"
+                : "Clip unavailable"
+            }
+            className="!border-0"
+          />
         )}
       </div>
       <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-neutral-500">
         <span>{cameraLabel}</span>
         <span>
-          {formatTimestamp(startedAt)} · {formatDuration(durationS)}
+          {showLiveMjpeg
+            ? "Live"
+            : `${formatTimestamp(startedAt)} · ${formatDuration(durationS)}`}
         </span>
       </div>
     </div>

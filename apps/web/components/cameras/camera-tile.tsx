@@ -20,66 +20,120 @@ interface Props {
 }
 
 const MJPEG_REFRESH_MS = 5000;
+const HLS_LOAD_TIMEOUT_MS = 8000;
 
 export function CameraTile({ camera }: Props) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [imgSrc, setImgSrc] = useState<string>(() =>
-    camera.streamType === "mjpeg" ? `${camera.streamUrl}?t=${Date.now()}` : "",
-  );
-  const [status, setStatus] = useState<"loading" | "live" | "error">("loading");
+  const [inView, setInView] = useState(false);
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "live" | "offline">("idle");
 
+  // Lazy-attach: only mount stream when scrolled into view
   useEffect(() => {
-    if (camera.streamType !== "hls" || !videoRef.current) return;
+    if (!containerRef.current) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setInView(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, []);
 
+  // HLS attach
+  useEffect(() => {
+    if (!inView || camera.streamType !== "hls" || !videoRef.current) return;
     const video = videoRef.current;
     let hls: Hls | null = null;
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
-    const onLoaded = () => {
-      if (!cancelled) setStatus("live");
+    setStatus("loading");
+    timer = setTimeout(() => {
+      if (!cancelled) setStatus("offline");
+    }, HLS_LOAD_TIMEOUT_MS);
+
+    const markLive = () => {
+      if (cancelled) return;
+      if (timer) clearTimeout(timer);
+      setStatus("live");
     };
-    const onError = () => {
-      if (!cancelled) setStatus("error");
+    const markOffline = () => {
+      if (cancelled) return;
+      if (timer) clearTimeout(timer);
+      setStatus("offline");
     };
+
+    const proxied = `/api/hls?url=${encodeURIComponent(camera.streamUrl)}`;
 
     if (Hls.isSupported()) {
-      hls = new Hls({ liveDurationInfinity: true, lowLatencyMode: true });
-      hls.loadSource(camera.streamUrl);
+      hls = new Hls({ lowLatencyMode: true, maxBufferLength: 4 });
+      hls.loadSource(proxied);
       hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, onLoaded);
+      hls.on(Hls.Events.MANIFEST_PARSED, markLive);
+      hls.on(Hls.Events.FRAG_LOADED, markLive);
       hls.on(Hls.Events.ERROR, (_e, data) => {
-        if (data.fatal) onError();
+        if (data.fatal) markOffline();
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = camera.streamUrl;
-      video.addEventListener("loadedmetadata", onLoaded);
-      video.addEventListener("error", onError);
+      video.src = proxied;
+      video.addEventListener("loadedmetadata", markLive);
+      video.addEventListener("error", markOffline);
     } else {
-      setStatus("error");
+      markOffline();
     }
 
     video.play().catch(() => {});
 
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
       hls?.destroy();
     };
-  }, [camera.streamUrl, camera.streamType]);
+  }, [inView, camera.streamUrl, camera.streamType]);
 
+  // MJPEG refresh
   useEffect(() => {
-    if (camera.streamType !== "mjpeg") return;
+    if (!inView || camera.streamType !== "mjpeg") return;
+    setStatus("loading");
+    setImgSrc(`${camera.streamUrl}?t=${Date.now()}`);
     const interval = setInterval(() => {
       setImgSrc(`${camera.streamUrl}?t=${Date.now()}`);
     }, MJPEG_REFRESH_MS);
     return () => clearInterval(interval);
-  }, [camera.streamUrl, camera.streamType]);
+  }, [inView, camera.streamUrl, camera.streamType]);
+
+  function handleImgLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const img = e.currentTarget;
+    // CalTrans "Temporarily Unavailable" placeholder is exactly 320×240
+    // Real feeds are 352×240 / 720×480 / 1280×720. Reject the placeholder size.
+    if (img.naturalWidth === 320 && img.naturalHeight === 240) {
+      setStatus("offline");
+      return;
+    }
+    setStatus("live");
+  }
 
   const dot =
-    status === "live" ? "bg-black" : status === "error" ? "bg-neutral-300" : "bg-neutral-400";
+    status === "live"
+      ? "bg-black"
+      : status === "loading"
+        ? "bg-neutral-400"
+        : status === "offline"
+          ? "bg-neutral-300"
+          : "bg-neutral-200";
 
   return (
-    <div className="relative flex aspect-video flex-col overflow-hidden border border-neutral-200 bg-black">
-      {camera.streamType === "hls" ? (
+    <div
+      ref={containerRef}
+      className="relative flex aspect-video flex-col overflow-hidden border border-neutral-200 bg-black"
+    >
+      {inView && camera.streamType === "hls" && (
         <video
           ref={videoRef}
           autoPlay
@@ -87,15 +141,29 @@ export function CameraTile({ camera }: Props) {
           playsInline
           className="h-full w-full bg-black object-cover"
         />
-      ) : (
+      )}
+
+      {inView && camera.streamType === "mjpeg" && imgSrc && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          key={imgSrc}
           src={imgSrc}
           alt={camera.description}
-          onLoad={() => setStatus("live")}
-          onError={() => setStatus("error")}
-          className="h-full w-full bg-black object-cover"
+          onLoad={handleImgLoad}
+          onError={() => setStatus("offline")}
+          className={cn(
+            "h-full w-full bg-black object-cover transition-opacity",
+            status === "live" ? "opacity-100" : "opacity-0",
+          )}
         />
+      )}
+
+      {(status === "offline" || (status === "loading" && inView)) && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+            {status === "offline" ? "No Signal" : "Connecting…"}
+          </span>
+        </div>
       )}
 
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between gap-2 bg-gradient-to-b from-black/70 to-transparent px-2 py-1.5">
