@@ -16,6 +16,7 @@
     "@caltrans/sync": "workspace:*",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "^2.45.0",
+    "@upstash/redis": "^1.38.0",
     "@xyflow/react": "^12.10.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
