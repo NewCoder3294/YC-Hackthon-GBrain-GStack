@@ -1,26 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { AudioFile, DispatchCall } from "@/lib/dispatch";
-import {
-  createFeedCursor,
-  jitterInterval,
-  nextDispatch,
-  type FeedCursor,
-} from "@/lib/dispatch-feed";
+import type { DispatchCall } from "@/lib/dispatch";
+import type { LiveIncident, LiveIncidentSource } from "@/lib/live-incidents";
 
 export interface DispatchFeedConfig {
-  meanIntervalMs?: number;
+  pollMs?: number;
   maxOnScreen?: number;
   fadeAfterMs?: number;
-  initialBurst?: number;
-}
-
-interface CatalogState {
-  files: AudioFile[];
-  loading: boolean;
-  error: string | null;
-  manifestCount: number;
 }
 
 interface Result {
@@ -35,164 +22,135 @@ interface Result {
 }
 
 const DEFAULT_CONFIG: Required<DispatchFeedConfig> = {
-  meanIntervalMs: 14_000,
-  maxOnScreen: 50,
-  fadeAfterMs: 5 * 60_000,
-  initialBurst: 6,
+  pollMs: 30_000,
+  maxOnScreen: 80,
+  fadeAfterMs: 15 * 60_000,
 };
+
+// Source-specific framing for the dispatch panel header. Live incidents
+// don't carry a radio talkgroup the way scanner audio does, but every
+// source has a friendly label and an "agency" attribution.
+const SOURCE_AGENCY: Record<LiveIncidentSource, string> = {
+  sfpd_cad: "SFPD",
+  sf_fire_ems: "SF Fire / EMS",
+  sf_311: "SF 311",
+  sfpd_reports: "SFPD Reports",
+  "511_traffic": "511 Traffic",
+  "511_transit": "511 Transit",
+};
+
+const SOURCE_TALKGROUP: Record<LiveIncidentSource, string> = {
+  sfpd_cad: "SFPD CAD",
+  sf_fire_ems: "Fire / EMS",
+  sf_311: "311",
+  sfpd_reports: "SFPD Reports",
+  "511_traffic": "511 Traffic",
+  "511_transit": "511 Transit",
+};
+
+function severityToPriority(severity: "low" | "med" | "high"): string {
+  if (severity === "high") return "A";
+  if (severity === "med") return "B";
+  return "C";
+}
+
+function liveIncidentToDispatchCall(r: LiveIncident): DispatchCall {
+  const priority =
+    r.source === "sfpd_cad" && r.priority
+      ? r.priority.toUpperCase()
+      : severityToPriority(r.severity);
+  const address =
+    r.address ?? (r.neighborhood ? `Near ${r.neighborhood}` : "Unknown location");
+  return {
+    id: r.id,
+    audioUrl: "",
+    callNumber: r.sourceUid,
+    receivedAt: r.occurredAt,
+    recordedAt: r.occurredAt,
+    callType: r.title,
+    callTypeCode: r.subtitle?.split("·")[0]?.trim() ?? r.kind.toUpperCase(),
+    priority,
+    address,
+    neighborhood: r.neighborhood ?? "",
+    district: r.neighborhood ?? "",
+    agency: SOURCE_AGENCY[r.source],
+    talkgroup: SOURCE_TALKGROUP[r.source],
+    talkgroupId: null,
+    lat: r.lat,
+    lng: r.lng,
+    fileName: r.sourceUid,
+  };
+}
 
 export function useDispatchFeed(config: DispatchFeedConfig = {}): Result {
   const cfg = { ...DEFAULT_CONFIG, ...config };
-  const [catalog, setCatalog] = useState<CatalogState>({
-    files: [],
-    loading: true,
-    error: null,
-    manifestCount: 0,
-  });
   const [calls, setCalls] = useState<DispatchCall[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
 
-  const cursorRef = useRef<FeedCursor | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pausedRef = useRef(paused);
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
 
-  // Load the dispatch catalog once.
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/dispatch/manifest", { cache: "no-store" });
-        if (!alive) return;
-        if (!res.ok) {
-          setCatalog({
-            files: [],
-            loading: false,
-            error: `catalog ${res.status}`,
-            manifestCount: 0,
-          });
-          return;
-        }
-        const body = await res.json();
-        const files: AudioFile[] = body.files ?? [];
-        setCatalog({
-          files,
-          loading: false,
-          error: files.length === 0 ? "catalog empty" : null,
-          manifestCount: body.withManifest ?? 0,
-        });
-      } catch (err) {
-        if (!alive) return;
-        setCatalog({
-          files: [],
-          loading: false,
-          error: err instanceof Error ? err.message : "catalog fetch failed",
-          manifestCount: 0,
-        });
+  const fetchOnce = useCallback(async () => {
+    try {
+      const res = await fetch("/api/live/incidents/recent", { cache: "no-store" });
+      const body = await res.json();
+      if (!res.ok) {
+        setError(body.error ?? `live-incidents ${res.status}`);
+        setLoading(false);
+        return;
       }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // Prime the cursor when the catalog arrives.
-  useEffect(() => {
-    if (catalog.files.length === 0) {
-      cursorRef.current = null;
-      return;
+      const incidents: LiveIncident[] = body.incidents ?? [];
+      const mapped = incidents.map(liveIncidentToDispatchCall);
+      // Trim to the on-screen cap (newest first from upstream).
+      setCalls(mapped.slice(0, cfg.maxOnScreen));
+      setLoading(false);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "fetch failed");
+      setLoading(false);
     }
-    cursorRef.current = createFeedCursor(catalog.files);
-
-    // Seed the map with a short initial burst so the operator isn't
-    // staring at an empty canvas on first paint.
-    setCalls((prev) => {
-      if (prev.length > 0) return prev;
-      if (!cursorRef.current) return prev;
-      const burst: DispatchCall[] = [];
-      const now = Date.now();
-      for (let i = 0; i < cfg.initialBurst; i++) {
-        const c = nextDispatch(cursorRef.current);
-        const ageSec = (cfg.initialBurst - i) * 28;
-        burst.push({ ...c, receivedAt: new Date(now - ageSec * 1000).toISOString() });
-      }
-      return burst;
-    });
-  }, [catalog.files, cfg.initialBurst]);
-
-  // Release loop — poisson-ish timer, self-rescheduling.
-  const schedule = useCallback(() => {
-    const tick = () => {
-      const cursor = cursorRef.current;
-      if (cursor && !pausedRef.current) {
-        try {
-          const call = nextDispatch(cursor);
-          setCalls((prev) => {
-            const next = [...prev, call];
-            return next.length > cfg.maxOnScreen
-              ? next.slice(next.length - cfg.maxOnScreen)
-              : next;
-          });
-        } catch {
-          // Catalog drained — next refresh will rebuild.
-        }
-      }
-      const delay = jitterInterval(cfg.meanIntervalMs, Math.random);
-      timerRef.current = setTimeout(tick, delay);
-    };
-    timerRef.current = setTimeout(tick, jitterInterval(cfg.meanIntervalMs, Math.random));
-  }, [cfg.maxOnScreen, cfg.meanIntervalMs]);
+  }, [cfg.maxOnScreen]);
 
   useEffect(() => {
-    if (catalog.files.length === 0) return;
-    schedule();
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = null;
-    };
-  }, [catalog.files, schedule]);
+    void fetchOnce();
+    const id = setInterval(() => {
+      if (!pausedRef.current) void fetchOnce();
+    }, cfg.pollMs);
+    return () => clearInterval(id);
+  }, [fetchOnce, cfg.pollMs]);
 
-  // Fade older calls so the on-screen set stays current.
+  // Fade older entries off-screen even between polls so the working set
+  // stays current when the operator leaves the tab open.
   useEffect(() => {
     const id = setInterval(() => {
       const cutoff = Date.now() - cfg.fadeAfterMs;
       setCalls((prev) => {
-        const filtered = prev.filter((c) => new Date(c.receivedAt).getTime() > cutoff);
-        return filtered.length === prev.length ? prev : filtered;
+        const next = prev.filter((c) => new Date(c.receivedAt).getTime() > cutoff);
+        return next.length === prev.length ? prev : next;
       });
-    }, 10_000);
+    }, 30_000);
     return () => clearInterval(id);
   }, [cfg.fadeAfterMs]);
 
   const emitNow = useCallback(() => {
-    const cursor = cursorRef.current;
-    if (!cursor) return;
-    try {
-      const call = nextDispatch(cursor);
-      setCalls((prev) => {
-        const next = [...prev, call];
-        return next.length > cfg.maxOnScreen
-          ? next.slice(next.length - cfg.maxOnScreen)
-          : next;
-      });
-    } catch {
-      // ignore
-    }
-  }, [cfg.maxOnScreen]);
+    void fetchOnce();
+  }, [fetchOnce]);
 
   return useMemo(
     () => ({
       calls,
       paused,
       setPaused,
-      fileCount: catalog.files.length,
-      manifestCount: catalog.manifestCount,
-      loading: catalog.loading,
-      error: catalog.error,
+      fileCount: calls.length,
+      manifestCount: calls.length,
+      loading,
+      error,
       emitNow,
     }),
-    [calls, paused, catalog.files.length, catalog.manifestCount, catalog.loading, catalog.error, emitNow],
+    [calls, paused, loading, error, emitNow],
   );
 }
