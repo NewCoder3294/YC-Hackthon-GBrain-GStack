@@ -6,7 +6,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { CameraTileData } from "@/components/cameras/camera-tile";
 import { CameraTile } from "@/components/cameras/camera-tile";
 import { IncidentPanel } from "./incident-panel";
+import { DispatchPanel } from "./dispatch-panel";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
+import { isHighPriority, type DispatchCall } from "@/lib/dispatch";
+import { useDispatchCalls } from "@/hooks/use-dispatch-calls";
 import { cn } from "@/lib/utils";
 
 type CamWithCoords = CameraTileData & { lat: number; lng: number };
@@ -81,13 +84,19 @@ export function SFMap({ cameras }: Props) {
   const mapRef = useRef<MlMap | null>(null);
   const incidentMarkersRef = useRef<maplibregl.Marker[]>([]);
   const signalMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const dispatchMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   const [stream, setStream] = useState<StreamFilter>("hls");
   const [showCameras, setShowCameras] = useState(true);
   const [showIncidents, setShowIncidents] = useState(true);
   const [showSignals, setShowSignals] = useState(true);
+  const [showDispatch, setShowDispatch] = useState(true);
   const [selectedCam, setSelectedCam] = useState<CamWithCoords | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<WdIncident | null>(null);
+  const [selectedDispatch, setSelectedDispatch] = useState<DispatchCall | null>(null);
+
+  const dispatch = useDispatchCalls();
 
   const filteredCams = useMemo(
     () => cameras.filter((c) => stream === "all" || c.streamType === stream),
@@ -207,6 +216,7 @@ export function SFMap({ cameras }: Props) {
         if (found) {
           setSelectedCam(found);
           setSelectedIncident(null);
+          setSelectedDispatch(null);
           map.easeTo({ center: feat.geometry.coordinates as [number, number], zoom: 14.5 });
         }
       });
@@ -241,6 +251,7 @@ export function SFMap({ cameras }: Props) {
           ev.stopPropagation();
           setSelectedIncident(inc);
           setSelectedCam(null);
+          setSelectedDispatch(null);
           map.easeTo({ center: [inc.lng, inc.lat], zoom: 14.5 });
         });
         const marker = new maplibregl.Marker({ element: el }).setLngLat([inc.lng, inc.lat]).addTo(map);
@@ -258,14 +269,18 @@ export function SFMap({ cameras }: Props) {
           signalMarkersRef.current.push(sigMarker);
         }
       }
+
+      setMapLoaded(true);
     });
 
     return () => {
       ro.disconnect();
       incidentMarkersRef.current.forEach((m) => m.remove());
       signalMarkersRef.current.forEach((m) => m.remove());
+      dispatchMarkersRef.current.forEach((m) => m.remove());
       incidentMarkersRef.current = [];
       signalMarkersRef.current = [];
+      dispatchMarkersRef.current.clear();
       map.remove();
       mapRef.current = null;
     };
@@ -302,6 +317,51 @@ export function SFMap({ cameras }: Props) {
     }
   }, [showSignals]);
 
+  // Live SF dispatch markers — diff-and-sync against incoming calls.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    const store = dispatchMarkersRef.current;
+    const nextIds = new Set(dispatch.calls.map((c) => c.id));
+
+    for (const [id, marker] of store) {
+      if (!nextIds.has(id)) {
+        marker.remove();
+        store.delete(id);
+      }
+    }
+
+    for (const call of dispatch.calls) {
+      if (store.has(call.id)) continue;
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "wd-dispatch-marker";
+      if (isHighPriority(call.priority)) el.classList.add("wd-dispatch-marker-high");
+      el.dataset.priority = call.priority || "?";
+      el.setAttribute("aria-label", `${call.callType} at ${call.address}`);
+      el.title = `${call.priority || "?"} · ${call.callType} · ${call.address}`;
+      el.textContent = call.priority?.toUpperCase() || "•";
+      el.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        setSelectedDispatch(call);
+        setSelectedCam(null);
+        setSelectedIncident(null);
+        map.easeTo({ center: [call.lng, call.lat], zoom: 14.5 });
+      });
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat([call.lng, call.lat])
+        .addTo(map);
+      store.set(call.id, marker);
+    }
+  }, [dispatch.calls, mapLoaded]);
+
+  // Dispatch visibility toggle.
+  useEffect(() => {
+    for (const [, m] of dispatchMarkersRef.current) {
+      m.getElement().style.display = showDispatch ? "" : "none";
+    }
+  }, [showDispatch]);
+
   return (
     <div className="relative w-full" style={{ height: "calc(100vh - 3rem)", minHeight: 480 }}>
       <div
@@ -322,6 +382,11 @@ export function SFMap({ cameras }: Props) {
           onClick={() => setShowIncidents((v) => !v)}
         />
         <LayerToggle label="Signals" on={showSignals} onClick={() => setShowSignals((v) => !v)} />
+        <LayerToggle
+          label="Dispatch"
+          on={showDispatch}
+          onClick={() => setShowDispatch((v) => !v)}
+        />
         <Divider />
         <div className="flex">
           {(["hls", "mjpeg", "all"] as StreamFilter[]).map((opt, i) => (
@@ -341,7 +406,9 @@ export function SFMap({ cameras }: Props) {
           ))}
         </div>
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          {filteredCams.length} cams · {wdIncidents.length} incidents
+          {filteredCams.length} cams · {wdIncidents.length} incidents · {dispatch.calls.length}{" "}
+          dispatch{dispatch.loading ? " (loading)" : ""}
+          {dispatch.error ? ` (error: ${dispatch.error})` : ""}
         </span>
       </div>
 
@@ -364,6 +431,14 @@ export function SFMap({ cameras }: Props) {
           label="Incident (live)"
         />
         <LegendRow swatch={<span className="font-mono text-[10px]">■▲●✦</span>} label="Signals" />
+        <LegendRow
+          swatch={
+            <span className="flex h-3 w-3 items-center justify-center rounded-full border border-black bg-white font-mono text-[8px] font-bold text-black">
+              A
+            </span>
+          }
+          label="Dispatch (SFGov · 2h)"
+        />
       </div>
 
       {selectedCam && (
@@ -396,6 +471,13 @@ export function SFMap({ cameras }: Props) {
       )}
       {selectedIncident && (
         <IncidentPanel incident={selectedIncident} onClose={() => setSelectedIncident(null)} />
+      )}
+      {selectedDispatch && (
+        <DispatchPanel
+          key={selectedDispatch.id}
+          call={selectedDispatch}
+          onClose={() => setSelectedDispatch(null)}
+        />
       )}
 
       <style jsx global>{`
@@ -474,6 +556,48 @@ export function SFMap({ cameras }: Props) {
         .wd-signal-marker[data-kind="camera"] {
           background: #000;
           color: #fff;
+        }
+        .wd-dispatch-marker {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          padding: 0;
+          border-radius: 9999px;
+          border: 2px solid #fff;
+          background: #000;
+          color: #fff;
+          font-family: var(--font-mono);
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 1;
+          cursor: pointer;
+          box-shadow: 0 0 0 1px #000;
+          transition: transform 120ms ease;
+        }
+        .wd-dispatch-marker:hover {
+          transform: scale(1.18);
+        }
+        .wd-dispatch-marker-high {
+          animation: wd-dispatch-pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes wd-dispatch-pulse {
+          0%,
+          100% {
+            box-shadow: 0 0 0 1px #000, 0 0 0 0 rgba(0, 0, 0, 0.45);
+          }
+          50% {
+            box-shadow: 0 0 0 1px #000, 0 0 0 8px rgba(0, 0, 0, 0);
+          }
+        }
+        @keyframes wd-bars {
+          from {
+            transform: scaleY(0.35);
+          }
+          to {
+            transform: scaleY(1.1);
+          }
         }
         .wd-popup .maplibregl-popup-content {
           padding: 6px 8px;

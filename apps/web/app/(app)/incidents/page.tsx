@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import {
   listDistinctRoutes,
   listDistinctTags,
@@ -105,7 +106,7 @@ export default async function IncidentsPage({ searchParams }: PageProps) {
                   >
                     <Td>
                       <Link
-                        href={`/incidents/${row.id}`}
+                        href={`/incidents/${row.id}` as Route}
                         className="block"
                         aria-label={`Open incident ${row.title}`}
                       >
@@ -119,7 +120,7 @@ export default async function IncidentsPage({ searchParams }: PageProps) {
                     </Td>
                     <Td>
                       <Link
-                        href={`/incidents/${row.id}`}
+                        href={`/incidents/${row.id}` as Route}
                         className="block font-mono text-xs"
                       >
                         <div className="text-black">{row.title}</div>
