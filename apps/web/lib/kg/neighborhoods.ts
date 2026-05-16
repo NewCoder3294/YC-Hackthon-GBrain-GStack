@@ -1,4 +1,5 @@
 import { SF_HOTSPOTS } from "@/lib/dispatch-hotspots";
+import type { KgNode } from "@/components/kg/types";
 
 export interface ProjectOpts {
   width: number;
@@ -52,4 +53,40 @@ export function projectToViewport(
     x: Math.round(Math.max(padding, Math.min(width - padding, x))),
     y: Math.round(Math.max(padding, Math.min(height - padding, y))),
   };
+}
+
+export const UNMAPPED = "Unmapped";
+
+export interface NeighborhoodContext {
+  /** `gang:<id>` -> neighborhood name */
+  gangNeighborhood: Map<string, string>;
+  /** `member:<id>` -> `gang:<id>` */
+  memberToGang: Map<string, string>;
+  /** `inc:<id>` -> neighborhood name (precomputed in data.ts) */
+  incidentNeighborhood: Map<string, string>;
+}
+
+export function resolveNeighborhood(
+  node: KgNode,
+  c: NeighborhoodContext,
+): string {
+  const meta = node.meta ?? {};
+  const lat = typeof meta.lat === "number" ? meta.lat : null;
+  const lng = typeof meta.lng === "number" ? meta.lng : null;
+  if (lat != null && lng != null) return nearestHotspot(lat, lng);
+
+  if (node.kind === "gang") {
+    return c.gangNeighborhood.get(node.id) ?? UNMAPPED;
+  }
+  if (node.kind === "member") {
+    const gang = c.memberToGang.get(node.id);
+    return (gang && c.gangNeighborhood.get(gang)) ?? UNMAPPED;
+  }
+  if (node.kind === "incident") {
+    return c.incidentNeighborhood.get(node.id) ?? UNMAPPED;
+  }
+  if (typeof meta.neighborhood === "string" && meta.neighborhood) {
+    return meta.neighborhood;
+  }
+  return UNMAPPED;
 }

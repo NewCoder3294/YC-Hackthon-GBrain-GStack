@@ -52,3 +52,37 @@ describe("projectToViewport", () => {
     expect(north.y).toBeLessThan(south.y);
   });
 });
+
+import { resolveNeighborhood, type NeighborhoodContext } from "./neighborhoods";
+import type { KgNode } from "@/components/kg/types";
+
+function ctx(over: Partial<NeighborhoodContext> = {}): NeighborhoodContext {
+  return {
+    gangNeighborhood: new Map(),
+    memberToGang: new Map(),
+    incidentNeighborhood: new Map(),
+    ...over,
+  };
+}
+const node = (id: string, kind: KgNode["kind"]): KgNode => ({ id, kind, label: id });
+
+describe("resolveNeighborhood", () => {
+  it("territory resolves from its own coords baked into the node meta", () => {
+    const n: KgNode = { id: "territory:1", kind: "territory", label: "T", meta: { lat: 37.7335, lng: -122.3893 } };
+    expect(resolveNeighborhood(n, ctx())).toBe("Bayview Hunters Point");
+  });
+  it("member resolves via its gang", () => {
+    const c = ctx({
+      memberToGang: new Map([["member:9", "gang:1"]]),
+      gangNeighborhood: new Map([["gang:1", "Mission"]]),
+    });
+    expect(resolveNeighborhood(node("member:9", "member"), c)).toBe("Mission");
+  });
+  it("incident resolves via incidentNeighborhood map", () => {
+    const c = ctx({ incidentNeighborhood: new Map([["inc:5", "Tenderloin"]]) });
+    expect(resolveNeighborhood(node("inc:5", "incident"), c)).toBe("Tenderloin");
+  });
+  it("falls back to Unmapped", () => {
+    expect(resolveNeighborhood(node("member:x", "member"), ctx())).toBe("Unmapped");
+  });
+});
