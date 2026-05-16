@@ -26,27 +26,53 @@ interface IncidentRow {
   created_at: string;
 }
 
-interface TimelineEvent {
+interface PageTagRow {
+  page_id: number;
+  tag: string;
+}
+
+interface ActivityCard {
+  /** Unique key for React. */
+  key: string;
+  /** When this fused/landed. */
   ts: string;
-  kind: "incident" | "page";
-  /** For incidents: incident id. For pages: slug. */
-  ref: string;
+  /** Incident id if known — drives link target. */
+  incidentId: string | null;
+  /** Final title (Claude's if enriched, otherwise raw). */
   title: string;
-  subtitle: string;
-  badge: string;
-  link: Route | null;
-  body: string;
+  /** Claude's narrative or null. */
+  narrative: string | null;
+  /** Decision hint pulled from tags if Claude provided one. */
+  decisionHint: "act" | "hold" | "review" | "dismiss" | null;
+  /** Whether Claude enriched this cluster. */
+  enriched: boolean;
+  /** Severity from incidents table. */
+  severity: "low" | "med" | "high";
+  /** All tags (region, signal, pattern, etc.). */
+  tags: string[];
+  /** Brief member breakdown ("11×camera_public") — pulled from raw fused text. */
+  mix: string | null;
+  /** The page slug (links to gbrain page if we surface that). */
+  pageSlug: string | null;
+}
+
+const DECISION_VALUES = new Set(["act", "hold", "review", "dismiss"] as const);
+type DecisionHint = "act" | "hold" | "review" | "dismiss";
+
+function isDecision(v: string): v is DecisionHint {
+  return DECISION_VALUES.has(v as DecisionHint);
 }
 
 async function loadActivity(): Promise<{
-  events: TimelineEvent[];
+  cards: ActivityCard[];
   pageCount: number;
   incidentCount: number;
+  enrichedCount: number;
   lastEventAt: string | null;
 }> {
   const supabase = await createClient();
 
-  // Worker-emitted gbrain pages: source_id='watchdog' AND frontmatter.source='openclaw-worker'.
+  // 1. Pull worker-emitted gbrain pages — the canonical "openclaw observation".
   const pagesRes = await supabase
     .from("pages")
     .select("id,slug,type,title,compiled_truth,created_at,updated_at,frontmatter")
@@ -54,75 +80,106 @@ async function loadActivity(): Promise<{
     .filter("frontmatter->>source", "eq", "openclaw-worker")
     .order("updated_at", { ascending: false })
     .limit(80);
-
-  if (pagesRes.error) {
-    throw new Error(`pages query failed: ${pagesRes.error.message}`);
-  }
+  if (pagesRes.error) throw new Error(pagesRes.error.message);
   const pages = (pagesRes.data ?? []) as PageRow[];
 
-  // Each intel_note page carries a related_incident_id in its frontmatter —
-  // join those uuids back to incidents so we surface "incident posted" rows in
-  // the timeline. No need for a WORKER_USER_ID env on the web side.
-  const relatedIncidentIds = Array.from(
+  // 2. Join back to incidents via frontmatter.related_incident_id.
+  const incidentIds = Array.from(
     new Set(
       pages
         .map((p) => (p.frontmatter as { related_incident_id?: string } | null)?.related_incident_id)
         .filter((id): id is string => typeof id === "string" && id.length > 0),
     ),
   );
-
-  const incidents: IncidentRow[] =
-    relatedIncidentIds.length === 0
-      ? []
-      : await (async () => {
-          const incRes = await supabase
-            .from("incidents")
-            .select("id,title,severity,notes,created_at")
-            .in("id", relatedIncidentIds)
-            .order("created_at", { ascending: false });
-          if (incRes.error) {
-            throw new Error(`incidents query failed: ${incRes.error.message}`);
-          }
-          return (incRes.data ?? []) as IncidentRow[];
-        })();
-
-  const events: TimelineEvent[] = [];
-
-  for (const inc of incidents) {
-    events.push({
-      ts: inc.created_at,
-      kind: "incident",
-      ref: inc.id,
-      title: inc.title,
-      subtitle: inc.notes?.slice(0, 120) ?? "",
-      badge: `INCIDENT · ${inc.severity.toUpperCase()}`,
-      link: `/incidents/${inc.id}` as Route,
-      body: inc.notes ?? "",
-    });
+  const incidentMap = new Map<string, IncidentRow>();
+  if (incidentIds.length > 0) {
+    const incRes = await supabase
+      .from("incidents")
+      .select("id,title,severity,notes,created_at")
+      .in("id", incidentIds);
+    if (incRes.error) throw new Error(incRes.error.message);
+    for (const inc of (incRes.data ?? []) as IncidentRow[]) {
+      incidentMap.set(inc.id, inc);
+    }
   }
 
-  for (const p of pages) {
-    const fm = p.frontmatter ?? {};
-    const relInc = (fm as { related_incident_id?: string }).related_incident_id;
-    events.push({
+  // 3. Pull tags for these pages.
+  const pageIds = pages.map((p) => p.id);
+  const tagMap = new Map<number, string[]>();
+  if (pageIds.length > 0) {
+    const tagsRes = await supabase
+      .from("tags")
+      .select("page_id,tag")
+      .in("page_id", pageIds);
+    if (!tagsRes.error) {
+      for (const t of (tagsRes.data ?? []) as PageTagRow[]) {
+        const list = tagMap.get(t.page_id) ?? [];
+        list.push(t.tag);
+        tagMap.set(t.page_id, list);
+      }
+    }
+  }
+
+  // 4. Build one card per page (which is 1:1 with an openclaw observation).
+  let enrichedCount = 0;
+  const cards: ActivityCard[] = pages.map((p) => {
+    const fm = p.frontmatter as { related_incident_id?: string } | null;
+    const relIncId = fm?.related_incident_id ?? null;
+    const incident = relIncId ? incidentMap.get(relIncId) : undefined;
+
+    const tags = tagMap.get(p.id) ?? [];
+    const enriched = tags.includes("enriched:claude") || p.title.includes("🤖");
+    if (enriched) enrichedCount++;
+
+    // The page body for enriched cards starts with **title**\n\nnarrative.
+    // Strip that out cleanly.
+    let narrative: string | null = null;
+    if (enriched) {
+      const lines = p.compiled_truth.split("\n");
+      // Skip leading **title** line + blank lines, take the next paragraph.
+      const startIdx = lines.findIndex((l) => l.startsWith("**") && l.endsWith("**"));
+      if (startIdx >= 0) {
+        const slice = lines.slice(startIdx + 1).join("\n").trim();
+        // First paragraph (up to the blank line before "decision hint" or members).
+        narrative = slice
+          .split(/\n\n/)[0]!
+          .replace(/_decision hint:.*$/m, "")
+          .trim();
+      }
+    }
+
+    // Pull decision hint from tags.
+    const decisionTag = tags.find((t) => t.startsWith("decision:"));
+    const dec = decisionTag?.split(":")[1];
+    const decisionHint = dec && isDecision(dec) ? dec : null;
+
+    // Extract the "11×camera_public" mix from the compiled_truth if present.
+    const mixMatch = p.compiled_truth.match(/(?:fused\s+)(\d+)\s+signals/i);
+    const mix = mixMatch ? `${mixMatch[1]} signals` : null;
+
+    return {
+      key: p.slug,
       ts: p.updated_at ?? p.created_at,
-      kind: "page",
-      ref: p.slug,
-      title: p.title,
-      subtitle: p.slug,
-      badge: `${p.type.toUpperCase()} PAGE`,
-      link: relInc ? (`/incidents/${relInc}` as Route) : null,
-      body: p.compiled_truth.slice(0, 220),
-    });
-  }
+      incidentId: relIncId,
+      title: enriched ? p.title.replace(/^OpenClaw 🤖 /, "") : (incident?.title ?? p.title),
+      narrative,
+      decisionHint,
+      enriched,
+      severity: incident?.severity ?? "low",
+      tags: tags.filter((t) => !t.startsWith("decision:")).slice(0, 8),
+      mix,
+      pageSlug: p.slug,
+    };
+  });
 
-  events.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+  cards.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
 
   return {
-    events: events.slice(0, 60),
+    cards: cards.slice(0, 50),
     pageCount: pages.length,
-    incidentCount: incidents.length,
-    lastEventAt: events[0]?.ts ?? null,
+    incidentCount: incidentMap.size,
+    enrichedCount,
+    lastEventAt: cards[0]?.ts ?? null,
   };
 }
 
@@ -134,93 +191,125 @@ function formatRelative(ts: string): string {
   return new Date(ts).toISOString().slice(0, 16).replace("T", " ");
 }
 
+const SEVERITY_STYLES: Record<"low" | "med" | "high", string> = {
+  high: "border-black bg-black text-white",
+  med: "border-black bg-white text-black",
+  low: "border-neutral-300 bg-white text-neutral-500",
+};
+
+const DECISION_STYLES: Record<DecisionHint, { label: string; cls: string }> = {
+  act: { label: "act", cls: "border-black bg-black text-white" },
+  hold: { label: "hold", cls: "border-black bg-white text-black" },
+  review: { label: "review", cls: "border-neutral-400 bg-white text-neutral-600" },
+  dismiss: { label: "dismiss", cls: "border-neutral-300 bg-neutral-50 text-neutral-400" },
+};
+
+function prettyTag(tag: string): string {
+  // Strip the leading "kind:" prefix so the chip reads as the bare value.
+  const idx = tag.indexOf(":");
+  return idx > 0 ? tag.slice(idx + 1) : tag;
+}
+
 export default async function OpenclawPage() {
-  const { events, pageCount, incidentCount, lastEventAt } = await loadActivity();
+  const { cards, pageCount, incidentCount, enrichedCount, lastEventAt } =
+    await loadActivity();
 
   return (
     <section className="flex h-full flex-col">
       <OpenclawRealtime />
 
-      <header className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
+      <header className="flex items-center justify-between gap-4 border-b border-neutral-200 px-4 py-3">
         <div className="flex items-baseline gap-3">
           <h1 className="font-mono text-sm uppercase tracking-widest">
             OpenClaw <span className="text-neutral-300">· worker activity</span>
           </h1>
           <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-            {events.length} events · {incidentCount} incidents ·{" "}
-            {pageCount} pages
+            {enrichedCount} enriched · {pageCount - enrichedCount} raw ·{" "}
+            {incidentCount} incidents
           </span>
         </div>
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          {lastEventAt ? `last: ${formatRelative(lastEventAt)}` : "no activity yet"}
+          {lastEventAt ? `last: ${formatRelative(lastEventAt)}` : "no activity"}
         </span>
       </header>
 
-      {events.length === 0 ? (
+      {cards.length === 0 ? (
         <div className="flex flex-1 items-center justify-center p-12">
           <div className="max-w-md space-y-3 text-center">
             <p className="font-mono text-sm text-neutral-500">
               The worker hasn't fired anything yet.
             </p>
             <p className="font-mono text-xs leading-relaxed text-neutral-400">
-              In fusion mode, the worker only emits incidents when new
+              Fusion mode only emits when fresh{" "}
               <code className="mx-1 bg-neutral-100 px-1">signal_events</code>
-              cluster within {300}m / {90}s. If
-              <code className="mx-1 bg-neutral-100 px-1">signal_events</code>
-              is quiet, this feed stays quiet — by design.
-            </p>
-            <p className="pt-2 font-mono text-[10px] uppercase tracking-widest text-neutral-300">
-              start the worker locally:
-              <span className="mt-1 block text-neutral-500">
-                pnpm --filter @caltrans/openclaw-worker worker
-              </span>
+              cluster within 300 m / 90 s. Quiet feed = quiet city.
             </p>
           </div>
         </div>
       ) : (
-        <ol className="flex-1 overflow-y-auto">
-          {events.map((ev, i) => (
+        <ol className="flex-1 overflow-y-auto divide-y divide-neutral-200">
+          {cards.map((c) => (
             <li
-              key={`${ev.kind}-${ev.ref}-${i}`}
-              className="border-b border-neutral-100 px-4 py-3 hover:bg-neutral-50"
+              key={c.key}
+              className="flex flex-col gap-2 px-4 py-3 hover:bg-neutral-50"
             >
+              {/* Top row: severity, title, time, link */}
               <div className="flex items-baseline justify-between gap-3">
-                <div className="flex items-baseline gap-3 min-w-0">
-                  <span className="shrink-0 font-mono text-[9px] uppercase tracking-widest text-neutral-400 tabular-nums">
-                    {formatRelative(ev.ts)}
-                  </span>
+                <div className="flex items-baseline gap-2 min-w-0">
                   <span
-                    className={`shrink-0 border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest ${
-                      ev.kind === "incident"
-                        ? "border-black bg-black text-white"
-                        : "border-neutral-300 bg-white text-neutral-500"
-                    }`}
+                    className={`shrink-0 border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest ${SEVERITY_STYLES[c.severity]}`}
                   >
-                    {ev.badge}
+                    {c.severity}
                   </span>
-                  <p className="min-w-0 truncate font-mono text-[12px] font-medium text-black">
-                    {ev.title}
+                  {c.enriched && (
+                    <span
+                      title="Enriched by Claude"
+                      className="shrink-0 border border-neutral-300 bg-white px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-neutral-600"
+                    >
+                      claude
+                    </span>
+                  )}
+                  <p className="min-w-0 truncate font-mono text-[13px] font-medium text-black">
+                    {c.title}
                   </p>
                 </div>
-                {ev.link && (
-                  <Link
-                    href={ev.link}
-                    className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black"
-                  >
-                    open →
-                  </Link>
-                )}
+                <div className="flex shrink-0 items-baseline gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-400">
+                  <span>{formatRelative(c.ts)}</span>
+                  {c.incidentId && (
+                    <Link
+                      href={`/incidents/${c.incidentId}` as Route}
+                      className="text-neutral-500 hover:text-black"
+                    >
+                      open →
+                    </Link>
+                  )}
+                </div>
               </div>
-              {ev.subtitle && (
-                <p className="mt-1 pl-[6.5rem] font-mono text-[10px] text-neutral-500">
-                  {ev.subtitle}
+
+              {/* Narrative */}
+              {c.narrative && (
+                <p className="font-mono text-[11px] leading-relaxed text-neutral-700">
+                  {c.narrative}
                 </p>
               )}
-              {ev.body && ev.kind === "page" && (
-                <p className="mt-1 pl-[6.5rem] font-mono text-[10px] text-neutral-400 line-clamp-2">
-                  {ev.body.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\s+/g, " ")}
-                </p>
-              )}
+
+              {/* Bottom row: decision pill + tags + mix */}
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+                {c.decisionHint && (
+                  <span
+                    className={`border px-1.5 py-0.5 ${DECISION_STYLES[c.decisionHint].cls}`}
+                    title={`Claude's decision hint: ${c.decisionHint}`}
+                  >
+                    {DECISION_STYLES[c.decisionHint].label}
+                  </span>
+                )}
+                {c.mix && <span className="text-neutral-500">{c.mix}</span>}
+                {c.tags.map((t) => (
+                  <span key={t} className="text-neutral-400">
+                    #{prettyTag(t)}
+                  </span>
+                ))}
+              </div>
             </li>
           ))}
         </ol>
