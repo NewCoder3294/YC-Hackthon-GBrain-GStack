@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CameraTile, type CameraTileData, type CameraStatus } from "./camera-tile";
 import { RouteCombobox } from "./route-combobox";
 import { cn } from "@/lib/utils";
@@ -18,7 +18,7 @@ const GRID_OPTIONS = [
 
 type StreamFilter = "all" | "hls" | "mjpeg";
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 24;
 
 export function CameraWall({ cameras }: Props) {
   const [grid, setGrid] = useState<(typeof GRID_OPTIONS)[number]>(GRID_OPTIONS[1]);
@@ -181,13 +181,41 @@ export function CameraWall({ cameras }: Props) {
       )}
 
       {visibleCount < filtered.length && (
-        <button
-          onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-          className="self-center border border-black bg-white px-4 py-2 font-mono text-xs uppercase tracking-widest hover:bg-black hover:text-white"
-        >
-          Show more · {filtered.length - visibleCount} remaining
-        </button>
+        <InfiniteScrollSentinel
+          remaining={filtered.length - visibleCount}
+          onLoadMore={() => setVisibleCount((c) => c + PAGE_SIZE)}
+        />
       )}
+    </div>
+  );
+}
+
+function InfiniteScrollSentinel({
+  remaining,
+  onLoadMore,
+}: {
+  remaining: number;
+  onLoadMore: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onLoadMore();
+      },
+      { rootMargin: "400px" },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [onLoadMore]);
+  return (
+    <div
+      ref={ref}
+      className="self-center py-6 font-mono text-[10px] uppercase tracking-widest text-neutral-400"
+    >
+      Loading · {remaining} more
     </div>
   );
 }
