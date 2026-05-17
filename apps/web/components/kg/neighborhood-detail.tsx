@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   ReactFlow,
   Background,
@@ -10,6 +10,7 @@ import {
 } from "@xyflow/react";
 import { KgFlowNode, type KgNodeData } from "./kg-node";
 import { buildDetail } from "@/lib/kg/aggregate";
+import { KIND_LABEL, type KgNodeKind } from "./types";
 import type { KgNode, KgEdge } from "./types";
 
 const nodeTypes = { kg: KgFlowNode };
@@ -36,8 +37,11 @@ export function NeighborhoodDetail({
   edges,
   onSelect,
 }: Props) {
+  const [expanded, setExpanded] = useState<Set<KgNodeKind>>(new Set());
+  useEffect(() => { setExpanded(new Set()); }, [neighborhood]);
+
   const { rfNodes, rfEdges } = useMemo(() => {
-    const { spine, stubs, edges: dEdges } = buildDetail(neighborhood, nodes, edges);
+    const { spine, stubs, edges: dEdges } = buildDetail(neighborhood, nodes, edges, expanded);
     const spineRing = ring(spine.length, 320);
     const stubRing = ring(stubs.length, 560);
 
@@ -55,7 +59,7 @@ export function NeighborhoodDetail({
         const synthetic: KgNode = {
           id: s.id,
           kind: s.kind,
-          label: `+${s.count} ${s.kind}`,
+          label: `+${s.count} ${KIND_LABEL[s.kind]} ⊕`,
           sub: "click to expand",
         };
         const data: KgNodeData = { node: synthetic, state: "dimmed" };
@@ -78,7 +82,7 @@ export function NeighborhoodDetail({
     }));
 
     return { rfNodes, rfEdges };
-  }, [neighborhood, nodes, edges]);
+  }, [neighborhood, nodes, edges, expanded]);
 
   return (
     <ReactFlow
@@ -89,7 +93,19 @@ export function NeighborhoodDetail({
       fitViewOptions={{ padding: 0.2 }}
       proOptions={{ hideAttribution: true }}
       nodesConnectable={false}
-      onNodeClick={(_, n) => onSelect(n.id)}
+      onNodeClick={(_, n) => {
+        if (n.id.startsWith("stub:")) {
+          const parts = n.id.split(":");
+          const kind = parts[parts.length - 1] as KgNodeKind;
+          setExpanded((prev) => {
+            const next = new Set(prev);
+            next.add(kind);
+            return next;
+          });
+          return;
+        }
+        onSelect(n.id);
+      }}
       minZoom={0.3}
       maxZoom={2.2}
     >

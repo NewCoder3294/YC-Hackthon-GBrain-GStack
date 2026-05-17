@@ -78,6 +78,7 @@ export function buildDetail(
   neighborhood: string,
   nodes: KgNode[],
   edges: KgEdge[],
+  expanded: ReadonlySet<KgNodeKind> = new Set(),
 ): { spine: KgNode[]; stubs: StubNode[]; edges: KgEdge[] } {
   const local = nodes.filter((x) => (x.neighborhood ?? "Unmapped") === neighborhood);
 
@@ -93,20 +94,27 @@ export function buildDetail(
       const tb = new Date(String(b.meta?.created_at ?? "")).getTime();
       return (Number.isNaN(tb) ? -Infinity : tb) - (Number.isNaN(ta) ? -Infinity : ta);
     });
-  incidents.slice(0, DETAIL_INCIDENT_LIMIT).forEach((i) => spine.push(i));
-  if (incidents.length > DETAIL_INCIDENT_LIMIT) {
-    overflow.set("incident", incidents.length - DETAIL_INCIDENT_LIMIT);
+  if (expanded.has("incident")) {
+    // When incident is expanded, all incidents go to spine; no stub emitted.
+    incidents.forEach((i) => spine.push(i));
+  } else {
+    incidents.slice(0, DETAIL_INCIDENT_LIMIT).forEach((i) => spine.push(i));
+    if (incidents.length > DETAIL_INCIDENT_LIMIT) {
+      overflow.set("incident", incidents.length - DETAIL_INCIDENT_LIMIT);
+    }
   }
 
   for (const x of local) {
     if (x.kind === "incident") continue;
     // Unacknowledged alerts are high-signal and stay in the spine;
     // acknowledged ones collapse into the alert stub.
+    // Expanded kinds bypass stub collapsing entirely.
     const isSpine =
       UNCONDITIONAL_SPINE_KINDS.has(x.kind) ||
-      (x.kind === "alert" && x.meta?.ack !== "acknowledged");
+      (x.kind === "alert" && x.meta?.ack !== "acknowledged") ||
+      expanded.has(x.kind);
     if (isSpine) spine.push(x);
-    else overflow.set(x.kind, (overflow.get(x.kind) ?? 0) + 1);
+    else if (!expanded.has(x.kind)) overflow.set(x.kind, (overflow.get(x.kind) ?? 0) + 1);
   }
 
   const stubs: StubNode[] = [...overflow.entries()].map(([kind, count]) => ({

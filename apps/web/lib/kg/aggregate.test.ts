@@ -93,4 +93,18 @@ describe("buildDetail", () => {
     expect(spine.find((s) => s.id === "alert:acked")).toBeUndefined();
     expect(stubs.find((s) => s.kind === "alert")?.count).toBe(1);
   });
+  it("expands a kind into the spine and drops its stub when requested", () => {
+    const { spine, stubs } = buildDetail("Mission", nodes, edges, new Set(["member"]));
+    expect(spine.filter((s) => s.kind === "member")).toHaveLength(5);
+    expect(stubs.find((s) => s.kind === "member")).toBeUndefined();
+  });
+  it("expanding incident includes all incidents and removes the incident stub", () => {
+    const { spine, stubs } = buildDetail("Mission", nodes, edges, new Set(["incident"]));
+    expect(spine.filter((s) => s.kind === "incident")).toHaveLength(12);
+    expect(stubs.find((s) => s.kind === "incident")).toBeUndefined();
+  });
+  it("non-expanded kinds still collapse to stubs", () => {
+    const { stubs } = buildDetail("Mission", nodes, edges, new Set(["member"]));
+    expect(stubs.find((s) => s.kind === "incident")?.count).toBe(12 - DETAIL_INCIDENT_LIMIT);
+  });
 });

@@ -47,7 +47,7 @@ export function OverviewMap({ nodes, edges, onOpenNeighborhood }: Props) {
           width: size,
           height: size,
           borderRadius: 999,
-          border: `${1 + Math.min(4, c.maxSeverity === 0 ? 0 : c.maxSeverity)}px solid #000`,
+          border: `${1 + Math.min(4, c.maxSeverity)}px solid #000`,
           background: "#fff",
           fontFamily: "var(--font-mono)",
           fontSize: 10,
