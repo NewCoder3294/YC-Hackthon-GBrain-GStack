@@ -62,25 +62,63 @@ function parseRationale(body: string): string {
   return "";
 }
 
+interface TitleParts {
+  tier?: Tier;
+  affinity?: string;
+  neighborhood?: string;
+  samples?: number;
+  priority?: number;
+}
+
+/**
+ * The correlator title is self-describing and ALWAYS returned with the
+ * page row:  "P3 · unknown · Mission Bay · 1 signal(s) · p0.29".
+ * The `tags` relationship embed is not always returned (depends on the
+ * Supabase role/RLS in the deployed env), so the title — not tags — is
+ * the source of truth for tier/affinity/neighborhood/samples/priority.
+ */
+function parseTitle(title: string): TitleParts {
+  const parts = title.split("·").map((s) => s.trim());
+  const out: TitleParts = {};
+  if (parts[0] && /^P[1-4]$/.test(parts[0])) out.tier = parts[0] as Tier;
+  if (parts[1] && parts[1].length > 0) out.affinity = parts[1];
+  if (parts[2] && parts[2].length > 0) out.neighborhood = parts[2];
+  const sig = parts.find((p) => /signal\(s\)/.test(p));
+  if (sig) {
+    const n = parseInt(sig, 10);
+    if (Number.isFinite(n)) out.samples = n;
+  }
+  const pm = title.match(/\bp(\d+(?:\.\d+)?)/);
+  if (pm && pm[1]) out.priority = Number(pm[1]);
+  return out;
+}
+
 export function mapPageToRankedIncident(
   row: IncidentPageRow,
 ): RankedIncident {
   const tags = (row.tags ?? []).map((t) => t.tag);
   const fm = row.frontmatter ?? {};
+  const t = parseTitle(row.title);
+  // Title is the source of truth (always present); tags only enrich
+  // the per-source list when the embed is available.
   const sources = tags
-    .filter((t) => t.startsWith("source:"))
-    .map((t) => t.slice("source:".length))
+    .filter((s) => s.startsWith("source:"))
+    .map((s) => s.slice("source:".length))
     .sort();
+  const samples =
+    typeof fm["samples"] === "number" ? fm["samples"] : (t.samples ?? 0);
   return {
     id: String(row.id),
     slug: row.slug,
-    tier: asTier(tagValue(tags, "priority:")),
-    priority: parsePriority(row.title, row.compiled_truth),
-    neighborhood: tagValue(tags, "neighborhood:") || "unknown",
-    affinity: tagValue(tags, "affinity:") || "unknown",
+    tier: asTier(t.tier ?? tagValue(tags, "priority:")),
+    priority:
+      t.priority ?? parsePriority(row.title, row.compiled_truth),
+    neighborhood:
+      t.neighborhood || tagValue(tags, "neighborhood:") || "unknown",
+    affinity: t.affinity || tagValue(tags, "affinity:") || "unknown",
     sources,
-    sourceCount: sources.length,
-    samples: typeof fm["samples"] === "number" ? fm["samples"] : 0,
+    sourceCount: sources.length > 0 ? sources.length : samples,
+    samples,
     confidence:
       typeof fm["confidence"] === "number" ? fm["confidence"] : 0,
     lat: typeof fm["lat"] === "number" ? fm["lat"] : 0,
