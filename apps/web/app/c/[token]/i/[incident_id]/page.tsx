@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { adminClient } from "@/lib/supabase/admin";
-import { getContributor } from "../../layout";
+import { getContributor } from "../../_contributor";
 
 export const dynamic = "force-dynamic";
 

@@ -172,7 +172,7 @@ export function CameraWall({ cameras }: Props) {
           Online
         </button>
 
-        <label className="ml-auto flex items-center gap-2">
+        <label className="flex flex-1 items-center gap-2 sm:ml-auto sm:flex-none">
           <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
             Search
           </span>
@@ -183,7 +183,7 @@ export function CameraWall({ cameras }: Props) {
               setVisibleCount(PAGE_SIZE);
             }}
             placeholder="street / route"
-            className="h-7 w-56 border border-neutral-200 bg-white px-2 font-mono text-xs placeholder:text-neutral-300 focus:border-black focus:outline-none"
+            className="h-7 w-full min-w-0 border border-neutral-200 bg-white px-2 font-mono text-xs placeholder:text-neutral-300 focus:border-black focus:outline-none sm:w-56"
           />
         </label>
 

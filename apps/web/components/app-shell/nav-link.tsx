@@ -18,7 +18,7 @@ export function NavLink({ href, label }: Props) {
       href={href}
       aria-current={active ? "page" : undefined}
       className={clsx(
-        "inline-flex items-center rounded-md px-3 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors duration-150",
+        "inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-2 py-1.5 font-mono text-xs uppercase tracking-wider transition-colors duration-150 sm:px-3",
         active
           ? "bg-black text-white"
           : "text-neutral-500 hover:bg-neutral-100 hover:text-black",

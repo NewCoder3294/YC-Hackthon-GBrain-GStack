@@ -128,3 +128,25 @@ html.dark [data-no-invert] {
     animation: none !important;
   }
 }
+
+/* --- Mobile helpers ----------------------------------------------------- */
+/* Hide native scrollbars while keeping horizontal scrolling functional —
+ * used by TopNav and any other horizontally-overflowing rail on mobile. */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Prevent accidental horizontal scroll on the whole page from a stray
+ * unwrapped element. Individual scroll containers (.no-scrollbar, tables
+ * inside overflow-x-auto) opt in to their own scrolling. */
+html, body { overflow-x: hidden; }
+
+/* Hands hovering over a phone don't have hover states — use larger
+ * tap targets on touch devices without inflating desktop. */
+@media (hover: none) and (pointer: coarse) {
+  button, [role="button"], a, input, select, textarea {
+    touch-action: manipulation;
+  }
+}

@@ -2,11 +2,22 @@ import { adminClient } from "@/lib/supabase/admin";
 
 interface AccessEvent {
   id: string;
-  requested_at: string;
-  requested_by: string;
+  occurred_at: string;
+  accessed_by: string;
   legal_basis: string;
-  decision: string;
-  denial_reason: string | null;
+  reason: string | null;
+  incident_id: string | null;
+  camera_id: string;
+}
+
+const BASIS_LABELS: Record<string, string> = {
+  standing_consent: "standing consent",
+  exigent: "exigent",
+  warrant: "warrant",
+};
+
+function formatTimestamp(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 19).replace("T", " ");
 }
 
 export async function AuditTable({ contributorId }: { contributorId: string }) {
@@ -17,59 +28,85 @@ export async function AuditTable({ contributorId }: { contributorId: string }) {
     .eq("contributor_id", contributorId);
   const ids = (camIds ?? []).map((c) => c.id);
   if (ids.length === 0) {
-    return <p className="font-mono text-xs text-neutral-500">No cameras yet.</p>;
+    return (
+      <p className="font-mono text-xs text-neutral-500">No cameras yet.</p>
+    );
   }
 
-  let data: AccessEvent[] | null = null;
-  try {
-    const r = await supabase
-      .from("access_events")
-      .select("id, requested_at, requested_by, legal_basis, decision, denial_reason")
-      .in("camera_id", ids)
-      .order("requested_at", { ascending: false })
-      .limit(50);
-    data = (r.data ?? null) as AccessEvent[] | null;
-  } catch {
-    data = null;
+  const { data, error } = await supabase
+    .from("camera_access_events")
+    .select(
+      "id, occurred_at, accessed_by, legal_basis, reason, incident_id, camera_id",
+    )
+    .in("camera_id", ids)
+    .order("occurred_at", { ascending: false })
+    .limit(50);
+
+  if (error) {
+    return (
+      <p className="font-mono text-xs text-rose-600">
+        Audit log unavailable: {error.message}
+      </p>
+    );
   }
 
-  if (!data || data.length === 0) {
-    return <p className="font-mono text-xs text-neutral-500">No queries against your cameras yet.</p>;
+  const events = (data ?? []) as AccessEvent[];
+  if (events.length === 0) {
+    return (
+      <div className="space-y-2 border border-neutral-200 bg-neutral-50 p-4">
+        <p className="font-mono text-xs text-neutral-700">
+          Nothing has queried your cameras yet.
+        </p>
+        <p className="font-mono text-[10px] leading-relaxed text-neutral-500">
+          Every time an operator pulls a clip or thumbnail from your camera —
+          for a dispatched call, a citizen report follow-up, or a manual
+          incident review — it'll show up here within seconds, including
+          who, why, and on what legal basis.
+        </p>
+      </div>
+    );
   }
+
   return (
-    <table className="w-full border-collapse border border-neutral-200 text-left">
-      <thead>
-        <tr className="border-b border-neutral-200 bg-neutral-50">
-          <Th>Time</Th>
-          <Th>Requester</Th>
-          <Th>Basis</Th>
-          <Th>Decision</Th>
-        </tr>
-      </thead>
-      <tbody>
-        {data.map((e) => (
-          <tr key={e.id} className="border-b border-neutral-200">
-            <Td>{new Date(e.requested_at).toLocaleString()}</Td>
-            <Td>{e.requested_by}</Td>
-            <Td>{e.legal_basis}</Td>
-            <Td>
-              {e.decision}
-              {e.denial_reason ? ` (${e.denial_reason})` : ""}
-            </Td>
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse border border-neutral-200 text-left font-mono text-[11px]">
+        <thead className="bg-neutral-50">
+          <tr className="border-b border-neutral-200 text-[9px] uppercase tracking-widest text-neutral-500">
+            <th className="px-3 py-2 font-normal">When</th>
+            <th className="px-3 py-2 font-normal">Who</th>
+            <th className="px-3 py-2 font-normal">Basis</th>
+            <th className="px-3 py-2 font-normal">Reason</th>
+            <th className="px-3 py-2 font-normal">Incident</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {events.map((e) => (
+            <tr key={e.id} className="border-b border-neutral-100 align-top">
+              <td className="px-3 py-2 whitespace-nowrap text-neutral-500">
+                {formatTimestamp(e.occurred_at)}
+              </td>
+              <td className="px-3 py-2 break-all text-black">{e.accessed_by}</td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                <span
+                  className={`border px-1.5 py-0.5 text-[9px] uppercase tracking-widest ${
+                    e.legal_basis === "warrant"
+                      ? "border-black bg-black text-white"
+                      : e.legal_basis === "exigent"
+                        ? "border-neutral-700 bg-white text-neutral-700"
+                        : "border-neutral-300 bg-white text-neutral-500"
+                  }`}
+                >
+                  {BASIS_LABELS[e.legal_basis] ?? e.legal_basis}
+                </span>
+              </td>
+              <td className="px-3 py-2 text-neutral-600">{e.reason ?? "—"}</td>
+              <td className="px-3 py-2 text-neutral-500">
+                {e.incident_id ? e.incident_id.slice(0, 8) : "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="px-3 py-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-      {children}
-    </th>
-  );
-}
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-3 py-2 font-mono text-xs">{children}</td>;
 }

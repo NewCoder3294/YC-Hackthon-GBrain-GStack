@@ -31,7 +31,18 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/auth");
-  const isPublicRoute = pathname === "/";
+  // Routes anyone (even logged-out SF residents) can read. The dashboard's
+  // pure OSINT views — anything that doesn't write or pull restricted data.
+  const isPublicRoute =
+    pathname === "/" ||
+    pathname === "/about" ||
+    pathname === "/map" ||
+    pathname === "/live" ||
+    pathname.startsWith("/live/") ||
+    pathname === "/feed" ||
+    pathname.startsWith("/feed/") ||
+    pathname === "/alerts" ||
+    pathname === "/privacy";
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const redirect = request.nextUrl.clone();
@@ -51,6 +62,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/cron|api/hls|api/dispatch|api/live|api/openclaw|api/seed|api/contribute|api/contributor-waitlist|c/|contribute|.*\\.[a-zA-Z0-9]+$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/cron|api/hls|api/dispatch|api/live|api/openclaw|api/seed|api/contribute|api/contributor-waitlist|api/alerts|api/bridge|c/|contribute|.*\\.[a-zA-Z0-9]+$).*)",
   ],
 };
