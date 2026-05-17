@@ -930,8 +930,21 @@ function MemoryDiagram() {
         22:50 · 2026-05-15
       </text>
 
-      <path d="M146,160 L174,160" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
-      <text x={160} y={146} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="0.6">
+      {/* Write arrow: span the full gap between Review box (right edge
+          x=144) and GBrain inner box (left edge x=184). A white badge
+          masks the middle of the arrow so the label punches through
+          cleanly instead of floating above the line. */}
+      <path d="M146,160 L184,160" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
+      <rect x={150} y={154} width={30} height={14} fill="white" />
+      <text
+        x={165}
+        y={164}
+        textAnchor="middle"
+        fontFamily={PX_MONO}
+        fontSize="8"
+        fill={DIAGRAM_MUTED}
+        letterSpacing="0.6"
+      >
         write
       </text>
 
@@ -988,8 +1001,20 @@ function MemoryDiagram() {
         );
       })}
 
-      <path d="M360,170 L390,170" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
-      <text x={360} y={156} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="0.6">
+      {/* Recall arrow: span the full gap between GBrain inner box
+          (right edge x=352) and Recall card (left edge x=394). Same
+          inline-badge pattern as the write arrow. */}
+      <path d="M352,170 L394,170" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
+      <rect x={356} y={164} width={34} height={14} fill="white" />
+      <text
+        x={373}
+        y={174}
+        textAnchor="middle"
+        fontFamily={PX_MONO}
+        fontSize="8"
+        fill={DIAGRAM_MUTED}
+        letterSpacing="0.6"
+      >
         recall
       </text>
 
