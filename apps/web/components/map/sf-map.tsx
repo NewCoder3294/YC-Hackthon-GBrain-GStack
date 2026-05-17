@@ -9,6 +9,7 @@ import { IncidentPanel } from "./incident-panel";
 import { DispatchPanel } from "./dispatch-panel";
 import { EventFeed } from "./event-feed";
 import { NewsPanel, type NewsIncidentRow } from "./news-panel";
+import { TopPriorityPanel } from "./top-priority-panel";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
 import { isHighPriority, type DispatchCall } from "@/lib/dispatch";
@@ -621,6 +622,8 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
           onClose={() => setSelectedNews(null)}
         />
       )}
+
+      <TopPriorityPanel onFocus={locateOnMap} />
 
       <EventFeed
         events={eventStream.events}
