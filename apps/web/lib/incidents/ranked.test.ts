@@ -73,4 +73,16 @@ describe("rankIncidentPages", () => {
     ]);
     expect(out.map((r) => r.slug)).toEqual(["hi", "lo"]);
   });
+
+  it("drops non-correlator (seed) incident pages", () => {
+    const seed = pageRow({
+      slug: "legacy-seed-42",
+      title: "some seeded incident",
+      frontmatter: { source: "seed" },
+      tags: [{ tag: "legacy" }],
+    });
+    const real = pageRow({ slug: "incident-deadbeef" });
+    const out = rankIncidentPages([seed, real]);
+    expect(out.map((r) => r.slug)).toEqual(["incident-deadbeef"]);
+  });
 });

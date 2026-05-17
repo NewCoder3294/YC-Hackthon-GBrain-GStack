@@ -101,8 +101,25 @@ export function rankComparator(
   return b.updatedAt.localeCompare(a.updatedAt);
 }
 
+/**
+ * A real correlator page always carries the `incident` tag and a
+ * `frontmatter.source` of `correlator`. Pre-existing / seed
+ * `type='incident'` GBrain pages have neither — without this guard they
+ * render as "P4 · unknown · 0 src" junk in the queue.
+ */
+export function isCorrelatorIncident(row: IncidentPageRow): boolean {
+  const taggedIncident = (row.tags ?? []).some((t) => t.tag === "incident");
+  const fromCorrelator =
+    (row.frontmatter ?? {})["source"] === "correlator";
+  const slugShaped = row.slug.startsWith("incident-");
+  return taggedIncident || fromCorrelator || slugShaped;
+}
+
 export function rankIncidentPages(
   rows: readonly IncidentPageRow[],
 ): RankedIncident[] {
-  return rows.map(mapPageToRankedIncident).sort(rankComparator);
+  return rows
+    .filter(isCorrelatorIncident)
+    .map(mapPageToRankedIncident)
+    .sort(rankComparator);
 }

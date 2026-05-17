@@ -9,6 +9,9 @@ import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Correlation over the live window can take 1–3 min; mirror the other
+// data-sync crons rather than risk the default cutoff.
+export const maxDuration = 300;
 
 /** Periodic correlator pass (mirrors /api/cron/sync-cameras). */
 export async function GET(request: NextRequest) {

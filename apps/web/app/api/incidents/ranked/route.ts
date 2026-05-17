@@ -22,6 +22,9 @@ export async function GET() {
       )
       .eq("source_id", "watchdog")
       .eq("type", "incident")
+      // Correlator slugs are `incident-<hash>`; this keeps pre-existing
+      // seed/placeholder incident pages out of the dispatch queue.
+      .like("slug", "incident-%")
       .order("updated_at", { ascending: false })
       .limit(100);
 
