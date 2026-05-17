@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-// A single dispatch call surfaced on the map. Now backed by a real audio
-// file from the dispatch-audio folder (captured from openmhz.com) rather
-// than text-to-speech of SFGov metadata.
+// A single dispatch call surfaced on the map. Backed by a stored audio
+// recording with associated talkgroup metadata.
 //
-// `receivedAt` is the simulated arrival time (when the pin appeared on
-// the map). `recordedAt` is the original record time pulled from the
-// OpenMHz filename when available — gives the panel both "ago" timings.
+// `receivedAt` is when the dispatch reached the operator surface (when
+// the pin appeared on the map). `recordedAt` is the original capture
+// time when present in the catalog metadata — gives the panel both
+// timings.
 export const dispatchCallSchema = z.object({
   id: z.string(),
   audioUrl: z.string(),
@@ -25,7 +25,6 @@ export const dispatchCallSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   fileName: z.string(),
-  generated: z.boolean(),
 });
 
 export type DispatchCall = z.infer<typeof dispatchCallSchema>;

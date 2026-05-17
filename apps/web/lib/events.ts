@@ -1,9 +1,8 @@
 import type { DispatchCall } from "./dispatch";
 
 // One operator-facing event in the live feed (bottom-right of the map).
-// Created either from a single dispatch call (the priority/type warrants
-// action on its own) or from a GBrain prediction that synthesized across
-// multiple signals.
+// Sourced from a single dispatch call (when the priority/type warrants
+// action on its own) or from a correlation across multiple signals.
 export type EventKind = "dispatch" | "predicted";
 
 // Lifecycle:
@@ -38,16 +37,12 @@ export interface OperatorEvent {
   cancelReason: string | null;
 }
 
-// Synthetic officer roster. Names + companies match the four active
-// SFPD talkgroups (Co. A/B/C/D) shown in the audio metadata so the
-// auto-assignment reads as district-aware.
+// On-call roster. Talkgroup affinity is used by the assignment logic so
+// a Bayview call (TG 812) usually routes to a Co. C officer.
 export interface Officer {
   id: string;
   name: string;
   company: "Co. A" | "Co. B" | "Co. C" | "Co. D";
-  // Talkgroup ID this officer typically rides on — used for affinity
-  // when auto-assigning so a Bayview call (TG 812) usually gets a Co. C
-  // officer, not random.
   talkgroupId: string;
 }
 

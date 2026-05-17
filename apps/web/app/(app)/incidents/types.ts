@@ -36,3 +36,28 @@ export interface IncidentFilters {
   severity?: Severity;
   q?: string;
 }
+
+// Dispatch audio entries surfaced in the same incidents table. They're
+// projected server-side from the dispatch catalog using a fixed seed
+// (stable per build).
+export interface DispatchIncidentRow {
+  id: string;
+  kind: "dispatch";
+  title: string;        // call type
+  callTypeCode: string;
+  priority: string;     // A | B | C | E
+  severity: Severity;   // derived from priority
+  notes: string;        // address
+  neighborhood: string;
+  district: string;
+  talkgroup: string;
+  talkgroupId: string | null;
+  audioUrl: string;
+  fileName: string;
+  createdAt: string;    // recordedAt
+}
+
+// Unified discriminated union for the incidents table.
+export type IncidentTableRow =
+  | ({ kind: "clip" } & IncidentRow)
+  | DispatchIncidentRow;

@@ -62,7 +62,7 @@ export function useEventStream(calls: DispatchCall[]): EventStream {
     }
   }, [calls]);
 
-  // 2) Periodic KG-style prediction sweep over the call window.
+  // 2) Periodic correlation sweep over the recent call window.
   useEffect(() => {
     if (calls.length === 0) return;
     const tick = () => {

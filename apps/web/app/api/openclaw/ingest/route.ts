@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
  * it, but the RPC call here lets the worker see how many alerts the
  * ingest produced.)
  *
- * Auth: bearer token must match CRON_SECRET (re-used as a worker secret
- * for the hackathon; v2 will use separate secrets per worker identity).
+ * Auth: bearer token must match CRON_SECRET (re-used as the worker
+ * secret; v2 will issue per-worker identities).
  */
 const ingestSchema = z.object({
   incident: z.object({

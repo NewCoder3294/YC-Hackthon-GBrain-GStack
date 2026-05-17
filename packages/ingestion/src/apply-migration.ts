@@ -1,5 +1,5 @@
 /**
- * One-shot migration applier (hackathon convenience).
+ * One-shot migration applier.
  *
  * The repo applies SQL migrations manually (0001_rls.sql, 0002 are not
  * in the drizzle journal). This runs a migration file through the

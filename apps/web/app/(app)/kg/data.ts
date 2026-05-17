@@ -2,18 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { KgEdge, KgNode } from "@/components/kg/types";
 import { isHighPriority, priorityLabel } from "@/lib/dispatch";
-import { scanDispatchAudio } from "@/lib/dispatch-audio-scan";
-import {
-  createSimulatorState,
-  nextDispatchCall,
-} from "@/lib/dispatch-simulator";
-import {
-  resolveNeighborhood,
-  nearestHotspot,
-  matchHotspotByName,
-  UNMAPPED,
-  type NeighborhoodContext,
-} from "@/lib/kg/neighborhoods";
+import { loadDispatchCatalog } from "@/lib/dispatch-catalog";
+import { createFeedCursor, nextDispatch } from "@/lib/dispatch-feed";
 
 interface GangRow {
   id: string;
@@ -88,6 +78,12 @@ interface GbrainPageRow {
     confidence?: number | string | null;
     samples?: number | null;
     source?: string | null;
+    // web_context-only fields
+    url?: string | null;
+    verdict?: "corroborate" | "neutral" | "contradict" | null;
+    reasoning?: string | null;
+    relevance?: number | null;
+    source_host?: string | null;
   } | null;
   updated_at: string;
   tags: { tag: string }[] | null;
@@ -104,6 +100,11 @@ interface GbrainRecordView {
   confidence: number | string | null;
   samples: number | null;
   source: string;
+  // web_context-only fields (populated when type === "web_context")
+  url?: string | null;
+  verdict?: "corroborate" | "neutral" | "contradict" | null;
+  relevance?: number | null;
+  source_host?: string | null;
 }
 
 interface GangEventRow {
@@ -221,10 +222,9 @@ export async function loadKgFromSupabase(): Promise<{
       )
       .order("occurred_at", { ascending: false })
       .limit(40),
-    // Real SFPD scanner audio (captured from openmhz.com, stored under
-    // /public/dispatch-audio/). KG generates a small snapshot of recent
-    // calls using the same simulator that drives the live map.
-    scanDispatchAudio(),
+    // Dispatch catalog — KG renders a small snapshot of recent calls
+    // alongside the live map's stream.
+    loadDispatchCatalog(),
   ]);
 
   const gangs = (gangsRes.data ?? []) as GangRow[];
@@ -249,6 +249,10 @@ export async function loadKgFromSupabase(): Promise<{
       confidence: fm.confidence ?? null,
       samples: fm.samples ?? null,
       source: fm.source ?? "gbrain",
+      url: fm.url ?? null,
+      verdict: fm.verdict ?? null,
+      relevance: fm.relevance ?? null,
+      source_host: fm.source_host ?? null,
     };
   });
   const events = (eventsRes.data ?? []) as GangEventRow[];
@@ -433,6 +437,37 @@ export async function loadKgFromSupabase(): Promise<{
           label: "context",
         });
       }
+    } else if (r.kind === "web_context") {
+      const verdict = r.verdict ?? "neutral";
+      const host = r.source_host ?? "";
+      const meta: Record<string, string | number> = { source: r.source };
+      if (r.confidence != null) meta.confidence = Number(r.confidence).toFixed(2);
+      if (r.relevance != null) meta.relevance = Number(r.relevance).toFixed(2);
+      if (host) meta.host = host;
+      meta.verdict = verdict;
+      if (r.url) meta.url = r.url;
+      nodes.push({
+        id: `gbrain:${r.id}`,
+        kind: "web_context",
+        label: r.title || host || "Web result",
+        sub: host ? `${host} · ${verdict}` : verdict,
+        meta,
+        source: "live",
+      });
+      if (r.related_incident_id) {
+        const edgeLabel =
+          verdict === "corroborate"
+            ? "corroborates"
+            : verdict === "contradict"
+              ? "contradicts"
+              : "context";
+        edges.push({
+          id: `e:inc-web:${r.id}`,
+          source: `inc:${r.related_incident_id}`,
+          target: `gbrain:${r.id}`,
+          label: edgeLabel,
+        });
+      }
     }
     // reviewed_incident kind doesn't appear as its own node — it lives behind
     // the decision node and is queryable via the incident's record list.
@@ -480,16 +515,14 @@ export async function loadKgFromSupabase(): Promise<{
     }
   }
 
-  // Dispatch (audio) nodes — generate a snapshot of recent SFPD scanner
-  // calls using the same simulator that drives the live map. KG shows
-  // what the operator has been hearing, with seeded neighborhood location
-  // nodes for place-of-occurrence context. Capped so the graph stays
-  // legible.
+  // Dispatch nodes — recent calls projected into the graph alongside
+  // neighborhood location nodes for place-of-occurrence context. Capped
+  // so the graph stays legible.
   if (audioFiles.length > 0) {
-    const kgSim = createSimulatorState(audioFiles);
+    const kgSim = createFeedCursor(audioFiles);
     const sampleSize = Math.min(20, audioFiles.length * 3);
     for (let i = 0; i < sampleSize; i++) {
-      const call = nextDispatchCall(kgSim);
+      const call = nextDispatch(kgSim);
       const placeName = call.neighborhood || call.district || "SF · unknown area";
       const locId = neighborhoodId(placeName);
       if (!seenLocations.has(locId)) {
@@ -566,90 +599,6 @@ export async function loadKgFromSupabase(): Promise<{
         label: "affects",
       });
     }
-  }
-
-  // --- Derive a neighborhood for every node (Overview+Detail redesign) ---
-  const gangNeighborhood = new Map<string, string>();
-  for (const g of gangs) {
-    const terr = territories.filter((t) => t.gang_id === g.id);
-    if (terr.length) {
-      const counts = new Map<string, number>();
-      for (const t of terr) {
-        const nb = nearestHotspot(t.center_lat, t.center_lng);
-        counts.set(nb, (counts.get(nb) ?? 0) + 1);
-      }
-      const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-      if (top) gangNeighborhood.set(`gang:${g.id}`, top[0]);
-    }
-  }
-
-  const memberToGang = new Map<string, string>();
-  for (const m of members) {
-    if (m.gang_id) memberToGang.set(`member:${m.id}`, `gang:${m.gang_id}`);
-  }
-
-  const incidentNeighborhood = new Map<string, string>();
-  for (const i of incidents) {
-    const ev = events.find(
-      (e) => e.related_incident_id === i.id && e.lat != null && e.lng != null,
-    );
-    if (ev && ev.lat != null && ev.lng != null) {
-      incidentNeighborhood.set(`inc:${i.id}`, nearestHotspot(ev.lat, ev.lng));
-      continue;
-    }
-    if (i.suspect_gang_id) {
-      const nb = gangNeighborhood.get(`gang:${i.suspect_gang_id}`);
-      if (nb) {
-        incidentNeighborhood.set(`inc:${i.id}`, nb);
-        continue;
-      }
-    }
-    const cam = i.clips[0]?.cameras ?? null;
-    if (cam) {
-      const camMatch = matchHotspotByName(`${cam.route} ${cam.description ?? ""}`);
-      if (camMatch) incidentNeighborhood.set(`inc:${i.id}`, camMatch);
-    }
-  }
-
-  const nctx: NeighborhoodContext = {
-    gangNeighborhood,
-    memberToGang,
-    incidentNeighborhood,
-  };
-
-  // territories carry coords -> bake into meta so the resolver can use them
-  for (const n of nodes) {
-    if (n.kind === "territory") {
-      const tid = n.id.replace(/^territory:/, "");
-      const t = territories.find((x) => x.id === tid);
-      if (t) {
-        n.meta = { ...(n.meta ?? {}), lat: t.center_lat, lng: t.center_lng };
-      }
-    }
-    if (n.kind === "event") {
-      const eid = n.id.replace(/^event:/, "");
-      const e = events.find((x) => String(x.id) === eid);
-      if (e && e.lat != null && e.lng != null) {
-        n.meta = { ...(n.meta ?? {}), lat: e.lat, lng: e.lng };
-      }
-    }
-  }
-
-  // pass 1: gangs, members, incidents, territories, events
-  for (const n of nodes) {
-    n.neighborhood = resolveNeighborhood(n, nctx);
-  }
-
-  // pass 2: alerts/decisions/arrests/baselines/patterns/locations inherit
-  // from the incident or gang they connect to via edges
-  const nbById = new Map(nodes.map((n) => [n.id, n.neighborhood ?? UNMAPPED]));
-  for (const n of nodes) {
-    if (n.neighborhood && n.neighborhood !== UNMAPPED) continue;
-    const resolved = edges
-      .filter((e) => e.source === n.id || e.target === n.id)
-      .map((e) => nbById.get(e.source === n.id ? e.target : e.source))
-      .find((nb) => nb && nb !== UNMAPPED);
-    n.neighborhood = resolved ?? UNMAPPED;
   }
 
   return { nodes, edges };

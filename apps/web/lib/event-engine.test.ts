@@ -28,7 +28,6 @@ function call(overrides: Partial<DispatchCall> = {}): DispatchCall {
     lat: 37.7838,
     lng: -122.4144,
     fileName: "x.m4a",
-    generated: true,
     ...overrides,
   };
 }

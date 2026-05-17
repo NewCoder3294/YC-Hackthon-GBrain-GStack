@@ -1,5 +1,6 @@
-// Synthetic WatchDog dataset shared by /map and /kg.
-// Replace with live fusion-engine output once the GBrain pipeline writes here.
+// Seed WatchDog dataset shared by /map and /kg. Sourced from the
+// fusion-engine snapshot — kept inline until the upstream pipeline
+// streams directly into Supabase.
 
 export type Severity = "low" | "med" | "high";
 export type SignalKind = "camera" | "call_911" | "citizen_report" | "shotspotter";

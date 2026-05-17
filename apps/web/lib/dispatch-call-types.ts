@@ -1,7 +1,7 @@
-// Common SFPD call types used to generate plausible metadata when an
-// audio file has no manifest entry. Priority weights are realistic-ish
-// rather than literal: code 245 (ADW) is almost always A/B, code 588
-// (vehicle stop) is almost always C, etc.
+// SFPD call-type reference. Used to render friendly labels and to fill
+// metadata gaps when a dispatch entry lacks an explicit type. Priority
+// weights track typical agency dispositions: code 245 (ADW) usually
+// rides at A/B, code 586 (vehicle stop) almost always at C, etc.
 
 export interface CallType {
   code: string;

@@ -24,6 +24,11 @@ interface Props {
 
 const MJPEG_REFRESH_MS = 5000;
 const HLS_LOAD_TIMEOUT_MS = 8000;
+// Structural-failure window: if the decoder never produced a real frame
+// (no width/height, never reached readyState>=2) by this deadline after
+// going "live", treat as offline. Pure pixel sampling is too noisy
+// (foggy / night / blank pavement looks blank but is a real feed).
+const STRUCTURAL_CHECK_MS = 10_000;
 
 export function CameraTile({ camera, onStatusChange }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -32,9 +37,13 @@ export function CameraTile({ camera, onStatusChange }: Props) {
   const [imgSrc, setImgSrc] = useState<string | null>(null);
   const [status, setStatus] = useState<CameraStatus>("idle");
 
+  const onStatusChangeRef = useRef(onStatusChange);
   useEffect(() => {
-    onStatusChange?.(status);
-  }, [status, onStatusChange]);
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
+  useEffect(() => {
+    onStatusChangeRef.current?.(status);
+  }, [status]);
 
   // Lazy-attach: only mount stream when scrolled into view
   useEffect(() => {
@@ -66,10 +75,26 @@ export function CameraTile({ camera, onStatusChange }: Props) {
       if (!cancelled) setStatus("offline");
     }, HLS_LOAD_TIMEOUT_MS);
 
+    let structuralTimer: ReturnType<typeof setTimeout> | null = null;
+    let liveOnce = false;
+    const scheduleStructuralCheck = () => {
+      structuralTimer = setTimeout(() => {
+        if (cancelled || !videoRef.current) return;
+        const v = videoRef.current;
+        const noDims = v.videoWidth === 0 || v.videoHeight === 0;
+        const noReady = v.readyState < 2;
+        if (noDims || noReady) setStatus("offline");
+      }, STRUCTURAL_CHECK_MS);
+    };
+
     const markLive = () => {
       if (cancelled) return;
       if (timer) clearTimeout(timer);
       setStatus("live");
+      if (!liveOnce) {
+        liveOnce = true;
+        scheduleStructuralCheck();
+      }
     };
     const markOffline = () => {
       if (cancelled) return;
@@ -112,6 +137,7 @@ export function CameraTile({ camera, onStatusChange }: Props) {
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      if (structuralTimer) clearTimeout(structuralTimer);
       hls?.destroy();
     };
   }, [inView, camera.streamUrl, camera.streamType]);
@@ -129,8 +155,8 @@ export function CameraTile({ camera, onStatusChange }: Props) {
 
   function handleImgLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const img = e.currentTarget;
-    // CalTrans "Temporarily Unavailable" placeholder is exactly 320×240
-    // Real feeds are 352×240 / 720×480 / 1280×720. Reject the placeholder size.
+    // CalTrans "Temporarily Unavailable" placeholder is exactly 320×240.
+    // Real feeds are 352×240 / 720×480 / 1280×720.
     if (img.naturalWidth === 320 && img.naturalHeight === 240) {
       setStatus("offline");
       return;
@@ -140,12 +166,12 @@ export function CameraTile({ camera, onStatusChange }: Props) {
 
   const dot =
     status === "live"
-      ? "bg-black"
+      ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]"
       : status === "loading"
-        ? "bg-neutral-400"
+        ? "bg-amber-400"
         : status === "offline"
-          ? "bg-neutral-300"
-          : "bg-neutral-200";
+          ? "bg-rose-500"
+          : "bg-neutral-300";
 
   return (
     <div

@@ -45,7 +45,7 @@ export function pickOfficer(
 
 // --- Predictions ----------------------------------------------------------
 
-// Pattern templates the KG-style prediction engine looks for. Each runs
+// Patterns the correlation engine watches for. Each detector runs
 // over the recent call window and returns a prediction or null.
 export interface Prediction {
   reason: string;

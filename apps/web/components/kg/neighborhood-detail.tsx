@@ -19,8 +19,8 @@ interface Props {
   neighborhood: string;
   nodes: KgNode[];
   edges: KgEdge[];
-  /** Called with a clicked node id. May be a `stub:<neighborhood>:<kind>`
-   * id when a collapsed stub is clicked — callers must handle that case. */
+  /** Called with a clicked non-stub node id. Stub clicks are handled
+   * internally (expand-in-place) and never reach this callback. */
   onSelect: (id: string) => void;
 }
 
@@ -96,10 +96,11 @@ export function NeighborhoodDetail({
       onNodeClick={(_, n) => {
         if (n.id.startsWith("stub:")) {
           const parts = n.id.split(":");
-          const kind = parts[parts.length - 1] as KgNodeKind;
+          const kind = parts[parts.length - 1];
+          if (!kind || !(kind in KIND_LABEL)) return;
           setExpanded((prev) => {
             const next = new Set(prev);
-            next.add(kind);
+            next.add(kind as KgNodeKind);
             return next;
           });
           return;

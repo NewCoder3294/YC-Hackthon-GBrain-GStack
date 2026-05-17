@@ -14,6 +14,8 @@ const WATCHED_TABLES = [
   "decisions",
   "pages",
   "gang_events",
+  // from origin/main: keep /live in sync on SFPD CAD sync bursts
+  "live_incidents",
 ] as const;
 
 const FLASH_DURATION_MS = 1200;

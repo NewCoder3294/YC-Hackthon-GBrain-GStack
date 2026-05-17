@@ -1,13 +1,12 @@
 import type { ManifestEntry } from "./dispatch";
 
-// OpenMHz captured filenames look like `sfp25-{talkgroupNum}-{epoch}.m4a`
-// (also .mp3/.wav/.ogg/.aac). The epoch is unix seconds when the call was
-// recorded. Parsing it gives us real per-file metadata for free, no
-// manifest.json required.
-const OPENMHZ_PATTERN = /^[a-z0-9]+-(\d+)-(\d{9,11})\.(m4a|mp3|wav|ogg|aac)$/i;
+// Trunked radio capture filenames follow the convention
+// `{system}-{talkgroupId}-{unixEpochSeconds}.{ext}` (m4a / mp3 / wav /
+// ogg / aac). The epoch is the wall-clock time of the call. Parsing the
+// filename gives us per-file metadata without a manifest.
+const TALKGROUP_FILENAME = /^[a-z0-9]+-(\d+)-(\d{9,11})\.(m4a|mp3|wav|ogg|aac)$/i;
 
-// Known SF Police P25 talkgroup → friendly name. Add as you confirm them
-// against radioreference.com / openmhz; unknown talkgroups fall back to
+// SF Police P25 talkgroup → friendly name. Unknown IDs fall back to
 // "Talkgroup {n}".
 const SFPD_TALKGROUP_NAMES: Record<string, string> = {
   "804": "SFPD Co. A (Central)",
@@ -22,8 +21,8 @@ export interface FilenameMetadata {
   recordedAt: string;
 }
 
-export function parseOpenMhzFilename(name: string): FilenameMetadata | null {
-  const m = name.match(OPENMHZ_PATTERN);
+export function parseTalkgroupFilename(name: string): FilenameMetadata | null {
+  const m = name.match(TALKGROUP_FILENAME);
   if (!m) return null;
   const talkgroupId = m[1]!;
   const epochSec = Number(m[2]!);
@@ -35,13 +34,13 @@ export function parseOpenMhzFilename(name: string): FilenameMetadata | null {
   };
 }
 
-// Merge manifest entry (explicit user-provided) with filename-derived
-// metadata (implicit). Explicit always wins.
+// Merge a declared manifest entry with metadata derived from the
+// filename. Declared always wins; derived fills the gaps.
 export function mergeFilenameMeta(
   existing: ManifestEntry | null,
   filename: string,
 ): ManifestEntry | null {
-  const fromName = parseOpenMhzFilename(filename);
+  const fromName = parseTalkgroupFilename(filename);
   if (!fromName && !existing) return null;
   const base: ManifestEntry = existing ?? { file: filename };
   if (!fromName) return base;

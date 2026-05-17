@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -12,10 +14,21 @@ export const metadata: Metadata = {
   },
 };
 
+// Pre-paint script — applies the dark class from localStorage BEFORE the
+// page first renders, preventing the white flash on dark-mode reloads.
+const themeBootScript = `try{if(localStorage.getItem('wd:dark')==='1')document.documentElement.classList.add('dark');}catch{}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body suppressHydrationWarning>{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
+      <body suppressHydrationWarning>
+        {children}
+        <Analytics />
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
