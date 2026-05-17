@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { env } from "@/lib/env";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 import { createServiceClient } from "@/lib/supabase/service";
 import { enrichIncident } from "@/lib/enrichment/pipeline";
 import type { IncidentContext } from "@/lib/enrichment/types";
@@ -34,8 +35,7 @@ function buildLocation(row: IncidentRow): string | null {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  if (!env.CRON_SECRET || auth !== `Bearer ${env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!env.FIRECRAWL_API_KEY || !env.ZEROENTROPY_API_KEY || !env.ANTHROPIC_API_KEY) {

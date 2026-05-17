@@ -6,6 +6,7 @@ import {
   createLogger,
 } from "@caltrans/ingestion";
 import { env } from "@/lib/env";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,8 +16,7 @@ export const maxDuration = 300;
 
 /** Periodic correlator pass (mirrors /api/cron/sync-cameras). */
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  if (!env.CRON_SECRET || auth !== `Bearer ${env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!env.DATABASE_URL) {

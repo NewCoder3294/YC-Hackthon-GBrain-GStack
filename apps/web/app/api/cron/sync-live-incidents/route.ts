@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createDb } from "@caltrans/db";
 import { syncLiveIncidents } from "@caltrans/sync";
 import { env } from "@/lib/env";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,8 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  if (!env.CRON_SECRET || auth !== `Bearer ${env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!env.DATABASE_URL) {

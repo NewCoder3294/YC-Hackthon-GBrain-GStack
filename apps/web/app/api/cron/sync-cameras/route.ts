@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { createDb } from "@caltrans/db";
 import { syncCameras, probeCameraLiveness } from "@caltrans/sync";
 import { env } from "@/lib/env";
+import { isAuthorizedCron } from "@/lib/cron-auth";
 import { CAMERAS_CACHE_TAG } from "@/lib/cameras/load";
 
 export const runtime = "nodejs";
@@ -10,8 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
-  const auth = request.headers.get("authorization");
-  if (!env.CRON_SECRET || auth !== `Bearer ${env.CRON_SECRET}`) {
+  if (!isAuthorizedCron(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (!env.DATABASE_URL) {
