@@ -876,10 +876,10 @@ function FusionDiagram() {
 function MemoryDiagram() {
   const chips = [
     { ts: "−3 d", note: "4× dismissed · bar crowd" },
-    { ts: "−7 d", note: "11 PM cluster · 16th & Valencia" },
-    { ts: "−12 d", note: "false pose: 0.71 · streetlight 14B" },
-    { ts: "−21 d", note: "confirmed assault · charged" },
-    { ts: "−34 d", note: "311 noise complaint · same corner" },
+    { ts: "−7 d", note: "11 PM cluster · Valencia" },
+    { ts: "−12 d", note: "false pose 0.71 · CAM 14B" },
+    { ts: "−21 d", note: "confirmed · charged" },
+    { ts: "−34 d", note: "311 noise · same corner" },
   ];
   // Re-trigger the chip reveal when the diagram scrolls into view so the
   // animation lands when the operator is actually looking at it.
@@ -980,7 +980,7 @@ function MemoryDiagram() {
               x={200}
               y={y + 27}
               fontFamily={PX_MONO}
-              fontSize="9"
+              fontSize="8"
               fill={isNew ? "white" : DIAGRAM_STROKE}
             >
               {c.note}
@@ -1035,7 +1035,31 @@ type DecisionState = "pending" | "approved" | "reassigned" | "rejected";
 function DecisionDiagram() {
   const [predicted, setPredicted] = useState<DecisionState>("pending");
   const [live, setLive] = useState<DecisionState>("pending");
+  // `auto` tracks whether the most recent state change came from the
+  // countdown auto-firing (true) vs a user click (false). Used to decide
+  // whether to loop the demo or hold the state.
+  const [predictedAuto, setPredictedAuto] = useState(false);
+  const [liveAuto, setLiveAuto] = useState(false);
   const [wrapRef, inView] = useInView<HTMLDivElement>({ threshold: 0.3 });
+
+  // Loop the demo: 4s after an auto-fire, snap back to pending so the
+  // countdown restarts. User clicks don't loop — they hold until reset.
+  useEffect(() => {
+    if (predicted !== "approved" || !predictedAuto) return;
+    const id = setTimeout(() => {
+      setPredicted("pending");
+      setPredictedAuto(false);
+    }, 4000);
+    return () => clearTimeout(id);
+  }, [predicted, predictedAuto]);
+  useEffect(() => {
+    if (live !== "approved" || !liveAuto) return;
+    const id = setTimeout(() => {
+      setLive("pending");
+      setLiveAuto(false);
+    }, 4000);
+    return () => clearTimeout(id);
+  }, [live, liveAuto]);
   const cardStyle = (i: number) =>
     inView
       ? {
@@ -1058,13 +1082,25 @@ function DecisionDiagram() {
           title="245 ADW · Mission corridor"
           sub="GBrain: A + B in same neighborhood, 4 calls in 7m · conf 0.78"
           officer="Off. Reyes 4B21 · Co. B"
-          countdown={22}
+          countdown={30}
           state={predicted}
           countdownAnimated={inView}
-          onApprove={() => setPredicted("approved")}
-          onReassign={() => setPredicted("reassigned")}
-          onReject={() => setPredicted("rejected")}
-          onReset={() => setPredicted("pending")}
+          onApprove={(auto) => {
+            setPredicted("approved");
+            setPredictedAuto(auto);
+          }}
+          onReassign={() => {
+            setPredicted("reassigned");
+            setPredictedAuto(false);
+          }}
+          onReject={() => {
+            setPredicted("rejected");
+            setPredictedAuto(false);
+          }}
+          onReset={() => {
+            setPredicted("pending");
+            setPredictedAuto(false);
+          }}
         />
       </div>
       <div style={cardStyle(1)}>
@@ -1074,13 +1110,25 @@ function DecisionDiagram() {
           title="594 Vandalism · Eddy & Leavenworth"
           sub="SFPD Co. D (Tenderloin) · TG 816 · call #261342053"
           officer="Off. Patel 4D05 · Co. D"
-          countdown={9}
+          countdown={20}
           state={live}
           countdownAnimated={inView}
-          onApprove={() => setLive("approved")}
-          onReassign={() => setLive("reassigned")}
-          onReject={() => setLive("rejected")}
-          onReset={() => setLive("pending")}
+          onApprove={(auto) => {
+            setLive("approved");
+            setLiveAuto(auto);
+          }}
+          onReassign={() => {
+            setLive("reassigned");
+            setLiveAuto(false);
+          }}
+          onReject={() => {
+            setLive("rejected");
+            setLiveAuto(false);
+          }}
+          onReset={() => {
+            setLive("pending");
+            setLiveAuto(false);
+          }}
         />
       </div>
       <p
@@ -1115,7 +1163,7 @@ function DecisionCard({
   countdown: number;
   state: DecisionState;
   countdownAnimated?: boolean;
-  onApprove: () => void;
+  onApprove: (auto: boolean) => void;
   onReassign: () => void;
   onReject: () => void;
   onReset: () => void;
@@ -1139,9 +1187,10 @@ function DecisionCard({
       setRemaining((r) => {
         if (r <= 1) {
           clearInterval(id);
-          // schedule the auto-approve on the next tick so React doesn't
-          // call a parent setState from inside a setState updater
-          setTimeout(onApprove, 0);
+          // Defer the parent setState by a tick so we don't update a
+          // parent state from inside our own state updater. Pass auto=true
+          // so the parent knows this was a countdown fire vs a button click.
+          setTimeout(() => onApprove(true), 0);
           return 0;
         }
         return r - 1;
@@ -1248,7 +1297,7 @@ function DecisionCard({
           </button>
           <button
             type="button"
-            onClick={onApprove}
+            onClick={() => onApprove(false)}
             className="flex-1 bg-black py-1.5 font-mono text-[10px] uppercase tracking-widest text-white transition-all duration-150 hover:bg-neutral-800 hover:tracking-[0.22em]"
           >
             Approve
