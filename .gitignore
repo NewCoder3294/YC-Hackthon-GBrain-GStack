@@ -19,3 +19,6 @@ yolov8n.pt
 *.save
 .env*.save
 .env.*.local
+
+# Superpowers brainstorm companion (local-only)
+.superpowers/
