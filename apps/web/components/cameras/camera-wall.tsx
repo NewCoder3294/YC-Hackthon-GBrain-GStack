@@ -18,7 +18,7 @@ const GRID_OPTIONS = [
 
 type StreamFilter = "all" | "hls" | "mjpeg";
 
-const PAGE_SIZE = 60;
+const PAGE_SIZE = 20;
 
 export function CameraWall({ cameras }: Props) {
   const [grid, setGrid] = useState<(typeof GRID_OPTIONS)[number]>(GRID_OPTIONS[1]);
@@ -26,7 +26,7 @@ export function CameraWall({ cameras }: Props) {
   const [stream, setStream] = useState<StreamFilter>("hls");
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [hideOffline, setHideOffline] = useState(false);
+  const [hideOffline, setHideOffline] = useState(true);
   const [offlineIds, setOfflineIds] = useState<Set<string>>(() => new Set());
 
   const reportStatus = useCallback((id: string, status: CameraStatus) => {
@@ -86,6 +86,16 @@ export function CameraWall({ cameras }: Props) {
     () => (hideOffline ? baseFiltered.filter((c) => !offlineIds.has(c.id)) : baseFiltered),
     [baseFiltered, hideOffline, offlineIds],
   );
+
+  // As tiles within the current window flip offline, the window shrinks. Grow
+  // the window from the tail (never from the middle, so anchor positions stay
+  // stable) until we're back at ~PAGE_SIZE visible — or run out of candidates.
+  useEffect(() => {
+    if (!hideOffline) return;
+    if (visible.length >= PAGE_SIZE) return;
+    if (visibleCount >= baseFiltered.length) return;
+    setVisibleCount((c) => Math.min(c + PAGE_SIZE, baseFiltered.length));
+  }, [visible.length, hideOffline, baseFiltered.length, visibleCount]);
 
   return (
     <div className="flex flex-col gap-4 p-4">
