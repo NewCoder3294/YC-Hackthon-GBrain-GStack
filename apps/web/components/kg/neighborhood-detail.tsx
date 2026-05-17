@@ -18,6 +18,8 @@ interface Props {
   neighborhood: string;
   nodes: KgNode[];
   edges: KgEdge[];
+  /** Called with a clicked node id. May be a `stub:<neighborhood>:<kind>`
+   * id when a collapsed stub is clicked — callers must handle that case. */
   onSelect: (id: string) => void;
 }
 
@@ -87,7 +89,7 @@ export function NeighborhoodDetail({
       fitViewOptions={{ padding: 0.2 }}
       proOptions={{ hideAttribution: true }}
       nodesConnectable={false}
-      onNodeClick={(_, n) => onSelect(String(n.id))}
+      onNodeClick={(_, n) => onSelect(n.id)}
       minZoom={0.3}
       maxZoom={2.2}
     >
