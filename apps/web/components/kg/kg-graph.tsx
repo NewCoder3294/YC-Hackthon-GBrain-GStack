@@ -60,6 +60,7 @@ function GraphInner({ nodes, edges }: Props) {
         <button
           type="button"
           onClick={backToOverview}
+          aria-current={view.mode === "overview" ? "page" : undefined}
           className={
             view.mode === "overview"
               ? "font-semibold"
@@ -103,9 +104,7 @@ function GraphInner({ nodes, edges }: Props) {
           node={selectedNode}
           neighbors={neighbors}
           onClose={() => setSelectedId(null)}
-          onNavigate={(id) => setSelectedId(id)}
-          onTrace={() => {}}
-          tracing={false}
+          onNavigate={setSelectedId}
         />
       )}
 
