@@ -8,6 +8,7 @@ import type {
 /** Minimum cross-neighborhood link count to draw an overview arc. */
 export const OVERVIEW_EDGE_MIN = 1;
 
+/** Aggregates raw KG nodes/edges into neighborhood clusters and cross-neighborhood arcs. */
 export function buildOverview(
   nodes: KgNode[],
   edges: KgEdge[],

@@ -34,13 +34,12 @@ describe("buildOverview", () => {
     expect(mission.alertCount).toBe(1); // alert:2 is acknowledged
     expect(mission.maxSeverity).toBe(5);
   });
-  it("creates a cross-neighborhood edge only at/above the threshold", () => {
+  it("creates exactly one cross-neighborhood edge with the right endpoints and weight", () => {
     const { clusterEdges } = buildOverview(nodes, edges);
-    if (OVERVIEW_EDGE_MIN <= 1) {
-      expect(clusterEdges).toHaveLength(1);
-      expect(clusterEdges[0]!.weight).toBe(1);
-    } else {
-      expect(clusterEdges).toHaveLength(0);
-    }
+    expect(OVERVIEW_EDGE_MIN).toBe(1);
+    expect(clusterEdges).toHaveLength(1);
+    const ce = clusterEdges[0]!;
+    expect(ce.weight).toBe(1);
+    expect([ce.from, ce.to].sort()).toEqual(["Bayview Hunters Point", "Mission"]);
   });
 });
