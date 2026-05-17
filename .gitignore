@@ -20,6 +20,8 @@ yolov8n.pt
 .env*.save
 .env.*.local
 
+# Superpowers brainstorm companion (local-only)
+.superpowers/
 # `vercel env pull caltrans-cctv.env.local` (run at repo root) creates files
 # that don't start with .env — catch the `*.env.local` shape too.
 *.env.local

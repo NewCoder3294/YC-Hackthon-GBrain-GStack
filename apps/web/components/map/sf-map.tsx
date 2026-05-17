@@ -8,6 +8,7 @@ import { CameraTile } from "@/components/cameras/camera-tile";
 import { IncidentPanel } from "./incident-panel";
 import { DispatchPanel } from "./dispatch-panel";
 import { EventFeed } from "./event-feed";
+import { TopPriorityPanel } from "./top-priority-panel";
 import { NewsPanel, type NewsIncidentRow } from "./news-panel";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
@@ -621,6 +622,8 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
           onClose={() => setSelectedNews(null)}
         />
       )}
+
+      <TopPriorityPanel onFocus={locateOnMap} />
 
       <EventFeed
         events={eventStream.events}
