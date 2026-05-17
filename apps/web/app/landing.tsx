@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
 
-type SourceType = "camera" | "call" | "citizen" | "shotspotter";
+type SourceType = "pd" | "fire" | "civic";
 type Severity = "low" | "med" | "high";
 
 interface Signal {
@@ -18,16 +18,15 @@ interface Signal {
 }
 
 const SCENARIO: Omit<Signal, "id" | "ts">[] = [
-  { source: "camera", location: "MISSION & 16TH", detail: "pose: fighting · 0.87", severity: "med" },
-  { source: "call", location: "MISSION & 16TH", detail: "911 hangup", severity: "med" },
-  { source: "shotspotter", location: "MISSION & 16TH", detail: "single report", severity: "high" },
+  { source: "pd", location: "MISSION & 16TH", detail: "245 ADW · priority A", severity: "high" },
+  { source: "fire", location: "MISSION & 16TH", detail: "EMS · medical aid", severity: "high" },
+  { source: "civic", location: "MISSION & 16TH", detail: "311 · loud crowd", severity: "med" },
 ];
 
 const SOURCE_GLYPH: Record<SourceType, string> = {
-  camera: "CAM",
-  call: "911",
-  citizen: "RPT",
-  shotspotter: "SHT",
+  pd: "PD",
+  fire: "FIRE",
+  civic: "311",
 };
 
 function pad(n: number, w = 2) {
@@ -118,10 +117,10 @@ function Hero() {
             <FlashWord delay={1200}>Every query auditable.</FlashWord>
           </h1>
           <p className="mt-8 max-w-xl font-mono text-sm leading-relaxed text-neutral-700">
-            Three live feeds — SFPD scanner, SF cameras, SFGov dispatch —
-            in one operator view, with memory of every prior incident.{" "}
+            Live SFPD dispatch, Fire/EMS, 311, and 511 traffic in one
+            operator view, with memory of every prior incident.{" "}
             <span className="text-black">All data on this site is real,
-            pulled live.</span>
+            pulled live from SF Open Data.</span>
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
@@ -428,9 +427,9 @@ function SignalRow({
   index: number;
   fusing: boolean;
 }) {
-  const PLACEHOLDER_ORDER = ["camera", "call", "shotspotter"] as const satisfies readonly SourceType[];
+  const PLACEHOLDER_ORDER = ["pd", "fire", "civic"] as const satisfies readonly SourceType[];
   const placeholderSrc: SourceType =
-    PLACEHOLDER_ORDER[index % PLACEHOLDER_ORDER.length] ?? "camera";
+    PLACEHOLDER_ORDER[index % PLACEHOLDER_ORDER.length] ?? "pd";
   return (
     <div
       className="flex h-full min-h-0 flex-1 items-center px-3"
@@ -554,11 +553,11 @@ function HowItWorks() {
         n="01"
         title="Fusion"
         kicker="Correlate signals across silos"
-        caption="Camera, 911, and ShotSpotter signals get matched on a 200 m / 60 s window into one ranked incident."
+        caption="SFPD dispatch, Fire/EMS, and 311 signals get matched by neighborhood + minute-window into one ranked queue."
         bullets={[
-          "Spatial-temporal match across CAM · 911 · SHT",
-          "Severity = source confidence × signal density",
-          "Three dashboards → one queue",
+          "3 detectors: cluster · escalation · hot talkgroup",
+          "Severity from SFPD priority (A/B/C/E)",
+          "Six SF data sources → one operator queue",
         ]}
         diagram={<FusionDiagram />}
       />
@@ -746,9 +745,9 @@ function ZoneFrame({
 
 function FusionDiagram() {
   const sources: { glyph: string; label: string; ts: string; meta: string }[] = [
-    { glyph: "CAM", label: "Streetlight 14B", ts: "22:50:01", meta: "pose: fighting · 0.87" },
-    { glyph: "911", label: "Hangup", ts: "22:50:08", meta: "no callback" },
-    { glyph: "SHT", label: "ShotSpotter", ts: "22:50:18", meta: "1 report" },
+    { glyph: "PD", label: "SFPD CAD", ts: "22:50:01", meta: "245 ADW · priority A" },
+    { glyph: "FIRE", label: "SF Fire/EMS", ts: "22:50:08", meta: "medical aid · 1B" },
+    { glyph: "311", label: "SF 311", ts: "22:50:18", meta: "loud noise · same block" },
   ];
   const rowH = 56;
   const baseY = 60;
@@ -836,10 +835,10 @@ function FusionDiagram() {
         CORRELATE
       </text>
       <text x={262} y={144} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        200 m · 60 s
+        neighborhood · 5–10 min
       </text>
       <text x={262} y={160} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        cosine + space-time
+        cluster · escalation · TG
       </text>
 
       <path
@@ -932,7 +931,7 @@ function MemoryDiagram() {
       </text>
 
       <path d="M146,160 L174,160" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
-      <text x={160} y={154} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+      <text x={160} y={146} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="0.6">
         write
       </text>
 
@@ -990,7 +989,7 @@ function MemoryDiagram() {
       })}
 
       <path d="M352,170 L378,170" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
-      <text x={365} y={164} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+      <text x={365} y={156} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="0.6">
         recall
       </text>
 
