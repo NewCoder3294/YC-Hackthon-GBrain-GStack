@@ -24,6 +24,7 @@ export function TopNav() {
           <NavLink href={"/map" as Route} label="Map" />
           <NavLink href={"/kg" as Route} label="Knowledge Graph" />
           <NavLink href={"/incidents" as Route} label="Incidents" />
+          <NavLink href={"/triage" as Route} label="Triage" />
         </nav>
       </div>
       <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-300">
