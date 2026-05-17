@@ -109,7 +109,14 @@ function GraphInner({ nodes, edges }: Props) {
       )}
 
       {!selectedNode && (
-        <GbrainQueryPanel onFocusGbrainId={(id) => setSelectedId(id)} />
+        <GbrainQueryPanel
+          nodes={nodes}
+          edges={edges}
+          onFocusInGraph={(id) => setSelectedId(id)}
+          onFocusGbrainId={(id) => setSelectedId(id)}
+          onHighlightIds={() => {}}
+          onClearHighlight={() => {}}
+        />
       )}
     </div>
   );
