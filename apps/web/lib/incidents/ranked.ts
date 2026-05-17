@@ -152,8 +152,12 @@ export function isCorrelatorIncident(row: IncidentPageRow): boolean {
   const taggedIncident = tags.includes("incident");
   const fromCorrelator =
     (row.frontmatter ?? {})["source"] === "correlator";
-  const hasPriorityTag = tags.some((t) => t.startsWith("priority:"));
-  return (taggedIncident || fromCorrelator) && hasPriorityTag;
+  const slugShaped = row.slug.startsWith("incident-");
+  // Title is the source of truth (always returned by the API even when
+  // RLS hides the tags embed). A correlator title always starts with
+  // "P1 ·" / "P2 ·" etc — if it does, that's enough to keep the row.
+  const titleHasTier = /^P[1-4]\s*·/.test(row.title);
+  return taggedIncident || fromCorrelator || slugShaped || titleHasTier;
 }
 
 export function rankIncidentPages(
