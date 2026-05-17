@@ -28,6 +28,8 @@ export interface RankedIncident {
   sourceCount: number;
   samples: number;
   confidence: number;
+  lat: number;
+  lng: number;
   rationale: string;
   updatedAt: string;
 }
@@ -81,6 +83,8 @@ export function mapPageToRankedIncident(
     samples: typeof fm["samples"] === "number" ? fm["samples"] : 0,
     confidence:
       typeof fm["confidence"] === "number" ? fm["confidence"] : 0,
+    lat: typeof fm["lat"] === "number" ? fm["lat"] : 0,
+    lng: typeof fm["lng"] === "number" ? fm["lng"] : 0,
     rationale: parseRationale(row.compiled_truth),
     updatedAt: row.updated_at,
   };

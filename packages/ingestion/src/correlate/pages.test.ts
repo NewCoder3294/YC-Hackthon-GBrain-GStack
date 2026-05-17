@@ -61,6 +61,8 @@ describe("buildIncidentPages", () => {
       samples: 2,
       legacy_id: "incident-deadbeef",
       confidence: 0.8,
+      lat: 37.76,
+      lng: -122.41,
       created_at: NOW.toISOString(),
       related_gang_id: null,
       related_incident_id: null,

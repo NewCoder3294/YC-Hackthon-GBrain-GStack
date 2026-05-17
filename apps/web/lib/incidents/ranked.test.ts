@@ -16,7 +16,9 @@ function pageRow(p: Partial<IncidentPageRow>): IncidentPageRow {
     compiled_truth:
       p.compiled_truth ??
       "**P1** correlated incident...\n| **Priority** | **0.82** |\n> Three sources within 90s on an armed call.",
-    frontmatter: p.frontmatter ?? { samples: 3, confidence: 0.7 },
+    frontmatter:
+      p.frontmatter ??
+      { samples: 3, confidence: 0.7, lat: 37.7601, lng: -122.4101 },
     updated_at: p.updated_at ?? "2026-05-16T12:00:00.000Z",
     tags: p.tags ?? [
       { tag: "incident" },
@@ -38,6 +40,8 @@ describe("mapPageToRankedIncident", () => {
     expect(r.affinity).toBe("weapons-violence");
     expect(r.sources).toEqual(["call_911", "camera"]);
     expect(r.sourceCount).toBe(2);
+    expect(r.lat).toBeCloseTo(37.7601, 4);
+    expect(r.lng).toBeCloseTo(-122.4101, 4);
     expect(r.samples).toBe(3);
     expect(r.confidence).toBe(0.7);
     expect(r.rationale).toBe("Three sources within 90s on an armed call.");

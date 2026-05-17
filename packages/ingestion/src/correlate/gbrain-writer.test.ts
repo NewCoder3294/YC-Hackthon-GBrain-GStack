@@ -17,6 +17,8 @@ function page(slug: string): IncidentPage {
       samples: 2,
       legacy_id: slug,
       confidence: 0.8,
+      lat: 37.76,
+      lng: -122.41,
       created_at: "2026-05-16T12:00:00.000Z",
       related_gang_id: null,
       related_incident_id: null,

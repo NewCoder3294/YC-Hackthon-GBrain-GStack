@@ -17,6 +17,9 @@ export interface IncidentFrontmatter {
   samples: number;
   legacy_id: string;
   confidence: number;
+  /** Cluster centroid — lets map UIs focus the incident. */
+  lat: number;
+  lng: number;
   created_at: string;
   related_gang_id: null;
   related_incident_id: null;
@@ -43,6 +46,16 @@ function meanConfidence(i: ScoredIncident): number {
       (sig.reduce((a, s) => a + s.confidence, 0) / sig.length) * 100,
     ) / 100
   );
+}
+
+function centroid(i: ScoredIncident): { lat: number; lng: number } {
+  const sig = i.cluster.signals;
+  const n = Math.max(1, sig.length);
+  const round = (x: number): number => Math.round(x * 1e6) / 1e6;
+  return {
+    lat: round(sig.reduce((a, s) => a + s.lat, 0) / n),
+    lng: round(sig.reduce((a, s) => a + s.lng, 0) / n),
+  };
 }
 
 function buildTimeline(i: ScoredIncident): string {
@@ -117,6 +130,7 @@ export function buildIncidentPages(
     const group = i.cluster.signals[0]?.affinityGroup ?? "unknown";
     const sources = [...new Set(i.cluster.signals.map((s) => s.source))].sort();
     const samples = i.cluster.signals.length;
+    const c = centroid(i);
     return {
       slug: i.cluster.id,
       type: "incident",
@@ -132,6 +146,8 @@ export function buildIncidentPages(
         samples,
         legacy_id: i.cluster.id,
         confidence: meanConfidence(i),
+        lat: c.lat,
+        lng: c.lng,
         created_at: createdAt,
         related_gang_id: null,
         related_incident_id: null,
