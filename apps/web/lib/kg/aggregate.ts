@@ -3,6 +3,8 @@ import type {
   KgEdge,
   NeighborhoodCluster,
   ClusterEdge,
+  StubNode,
+  KgNodeKind,
 } from "@/components/kg/types";
 
 /** Minimum cross-neighborhood link count to draw an overview arc. */
@@ -61,4 +63,54 @@ export function buildOverview(
     (x, y) => y.incidentCount - x.incidentCount,
   );
   return { clusters, clusterEdges };
+}
+
+export const DETAIL_INCIDENT_LIMIT = 8;
+const SPINE_KINDS: ReadonlySet<KgNodeKind> = new Set([
+  "gang",
+  "decision",
+]);
+
+export function buildDetail(
+  neighborhood: string,
+  nodes: KgNode[],
+  edges: KgEdge[],
+): { spine: KgNode[]; stubs: StubNode[]; edges: KgEdge[] } {
+  const local = nodes.filter((x) => (x.neighborhood ?? "Unmapped") === neighborhood);
+
+  const spine: KgNode[] = [];
+  const overflow = new Map<KgNodeKind, number>();
+
+  const incidents = local
+    .filter((x) => x.kind === "incident")
+    .sort((a, b) =>
+      String(b.meta?.created_at ?? "").localeCompare(String(a.meta?.created_at ?? "")),
+    );
+  incidents.slice(0, DETAIL_INCIDENT_LIMIT).forEach((i) => spine.push(i));
+  if (incidents.length > DETAIL_INCIDENT_LIMIT) {
+    overflow.set("incident", incidents.length - DETAIL_INCIDENT_LIMIT);
+  }
+
+  for (const x of local) {
+    if (x.kind === "incident") continue;
+    const isSpine =
+      SPINE_KINDS.has(x.kind) ||
+      (x.kind === "alert" && x.meta?.ack !== "acknowledged");
+    if (isSpine) spine.push(x);
+    else overflow.set(x.kind, (overflow.get(x.kind) ?? 0) + 1);
+  }
+
+  const stubs: StubNode[] = [...overflow.entries()].map(([kind, count]) => ({
+    id: `stub:${neighborhood}:${kind}`,
+    neighborhood,
+    kind,
+    count,
+  }));
+
+  const spineIds = new Set(spine.map((s) => s.id));
+  const detailEdges = edges.filter(
+    (e) => spineIds.has(e.source) && spineIds.has(e.target),
+  );
+
+  return { spine, stubs, edges: detailEdges };
 }

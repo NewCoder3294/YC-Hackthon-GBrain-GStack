@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildOverview, OVERVIEW_EDGE_MIN } from "./aggregate";
+import { buildOverview, OVERVIEW_EDGE_MIN, buildDetail, DETAIL_INCIDENT_LIMIT } from "./aggregate";
 import type { KgNode, KgEdge } from "@/components/kg/types";
 
 const n = (id: string, kind: KgNode["kind"], neighborhood: string, meta: KgNode["meta"] = {}): KgNode =>
@@ -41,5 +41,41 @@ describe("buildOverview", () => {
     const ce = clusterEdges[0]!;
     expect(ce.weight).toBe(1);
     expect([ce.from, ce.to].sort()).toEqual(["Bayview Hunters Point", "Mission"]);
+  });
+});
+
+describe("buildDetail", () => {
+  const nodes: KgNode[] = [
+    n("gang:1", "gang", "Mission"),
+    n("alert:1", "alert", "Mission", {}),
+    n("dec:1", "decision", "Mission"),
+    ...Array.from({ length: 12 }, (_, i) =>
+      n(`inc:${i}`, "incident", "Mission", { created_at: `2026-05-${10 + i}` }),
+    ),
+    ...Array.from({ length: 5 }, (_, i) => n(`member:${i}`, "member", "Mission")),
+    n("inc:other", "incident", "Bayview Hunters Point"),
+  ];
+  const edges: KgEdge[] = [{ id: "e1", source: "gang:1", target: "alert:1" }];
+
+  it("keeps gangs, alerts, decisions, and only the newest N incidents in the spine", () => {
+    const { spine } = buildDetail("Mission", nodes, edges);
+    const ids = spine.map((s) => s.id);
+    expect(ids).toContain("gang:1");
+    expect(ids).toContain("alert:1");
+    expect(ids).toContain("dec:1");
+    const inc = ids.filter((i) => i.startsWith("inc:"));
+    expect(inc).toHaveLength(DETAIL_INCIDENT_LIMIT);
+  });
+  it("collapses the overflow into per-kind stubs", () => {
+    const { stubs } = buildDetail("Mission", nodes, edges);
+    const memberStub = stubs.find((s) => s.kind === "member");
+    const incStub = stubs.find((s) => s.kind === "incident");
+    expect(memberStub?.count).toBe(5);
+    expect(incStub?.count).toBe(12 - DETAIL_INCIDENT_LIMIT);
+  });
+  it("excludes nodes from other neighborhoods", () => {
+    const { spine, stubs } = buildDetail("Mission", nodes, edges);
+    expect(spine.find((s) => s.id === "inc:other")).toBeUndefined();
+    expect(stubs.every((s) => s.neighborhood === "Mission")).toBe(true);
   });
 });
