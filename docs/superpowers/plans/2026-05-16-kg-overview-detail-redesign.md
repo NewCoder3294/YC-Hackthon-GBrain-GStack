@@ -309,11 +309,11 @@ export interface NeighborhoodCluster {
   maxSeverity: number;
 }
 
-/** Aggregated arc between two neighborhood clusters. */
+/** Aggregated arc between two neighborhood clusters (endpoints are neighborhood names). */
 export interface ClusterEdge {
   id: string;
-  a: string;
-  b: string;
+  from: string; // neighborhood name
+  to: string;   // neighborhood name
   weight: number;
 }
 
@@ -604,15 +604,15 @@ export function buildOverview(
     const a = nbOf.get(e.source);
     const b = nbOf.get(e.target);
     if (!a || !b || a === b) continue;
-    const key = [a, b].sort().join(" ");
+    const key = [a, b].sort().join("|");
     pairCount.set(key, (pairCount.get(key) ?? 0) + 1);
   }
 
   const clusterEdges: ClusterEdge[] = [];
   for (const [key, weight] of pairCount) {
     if (weight < OVERVIEW_EDGE_MIN) continue;
-    const [a, b] = key.split(" ") as [string, string];
-    clusterEdges.push({ id: `ce:${a}->${b}`, a, b, weight });
+    const [from, to] = key.split("|") as [string, string];
+    clusterEdges.push({ id: `ce:${from}->${to}`, from, to, weight });
   }
 
   const clusters = [...byNbhd.values()].sort(
@@ -834,11 +834,11 @@ export function OverviewMap({ nodes, edges, onOpenNeighborhood }: Props) {
     });
 
     const rfEdges: Edge[] = clusterEdges
-      .filter((e) => pos.has(e.a) && pos.has(e.b))
+      .filter((e) => pos.has(e.from) && pos.has(e.to))
       .map((e) => ({
         id: e.id,
-        source: `nb:${e.a}`,
-        target: `nb:${e.b}`,
+        source: `nb:${e.from}`,
+        target: `nb:${e.to}`,
         type: "default",
         style: { stroke: "#737373", strokeWidth: Math.min(4, e.weight) },
       }));
