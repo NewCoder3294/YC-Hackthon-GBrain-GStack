@@ -28,6 +28,7 @@ export function RealtimeRefresh({ channelName = "kg-live" }: Props) {
   const router = useRouter();
   const [flash, setFlash] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastEventRef = useRef<string>("");
 
   useEffect(() => {
@@ -42,12 +43,14 @@ export function RealtimeRefresh({ channelName = "kg-live" }: Props) {
           setFlash(true);
           if (flashTimer.current) clearTimeout(flashTimer.current);
           flashTimer.current = setTimeout(() => setFlash(false), 1200);
-          router.refresh();
+          if (refreshTimer.current) clearTimeout(refreshTimer.current);
+          refreshTimer.current = setTimeout(() => router.refresh(), 800);
         },
       );
     }
     channel.subscribe();
     return () => {
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
       if (flashTimer.current) clearTimeout(flashTimer.current);
       supabase.removeChannel(channel);
     };
