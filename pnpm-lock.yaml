@@ -23,6 +23,9 @@ importers:
       '@caltrans/ingestion':
         specifier: workspace:*
         version: link:../../packages/ingestion
+      '@caltrans/openclaw-worker':
+        specifier: workspace:*
+        version: link:../../packages/openclaw-worker
       '@caltrans/sync':
         specifier: workspace:*
         version: link:../../packages/sync

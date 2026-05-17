@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/correlate",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/openclaw-tick",
+      "schedule": "*/2 * * * *"
     }
   ]
 }
