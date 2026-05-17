@@ -36,7 +36,7 @@ describe("mapPageToRankedIncident", () => {
     const r = mapPageToRankedIncident(pageRow({}));
     expect(r.tier).toBe("P1");
     expect(r.priority).toBeCloseTo(0.82, 5);
-    expect(r.neighborhood).toBe("mission");
+    expect(r.neighborhood).toBe("Mission");
     expect(r.affinity).toBe("weapons-violence");
     expect(r.sources).toEqual(["call_911", "camera"]);
     expect(r.sourceCount).toBe(2);
@@ -45,6 +45,26 @@ describe("mapPageToRankedIncident", () => {
     expect(r.samples).toBe(3);
     expect(r.confidence).toBe(0.7);
     expect(r.rationale).toBe("Three sources within 90s on an armed call.");
+  });
+
+  it("maps from title alone when the tags embed is missing (prod bug)", () => {
+    // Reproduces the deployed-env failure: pages return, tags do not.
+    const r = mapPageToRankedIncident({
+      id: 890,
+      slug: "incident-39947b61",
+      type: "incident",
+      title: "P3 · weapons-violence · Mission Bay · 2 signal(s) · p0.61",
+      compiled_truth: "> Two sources near 16th & Mission.",
+      frontmatter: { source: "correlator", samples: 2, confidence: 0.8 },
+      updated_at: "2026-05-16T12:00:00.000Z",
+      tags: null,
+    });
+    expect(r.tier).toBe("P3");
+    expect(r.priority).toBeCloseTo(0.61, 5);
+    expect(r.affinity).toBe("weapons-violence");
+    expect(r.neighborhood).toBe("Mission Bay");
+    expect(r.samples).toBe(2);
+    expect(r.sourceCount).toBe(2); // falls back to samples, not 0
   });
 
   it("defaults safely on a sparse row", () => {
