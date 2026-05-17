@@ -105,14 +105,17 @@ export function rankComparator(
  * A real correlator page always carries the `incident` tag and a
  * `frontmatter.source` of `correlator`. Pre-existing / seed
  * `type='incident'` GBrain pages have neither — without this guard they
- * render as "P4 · unknown · 0 src" junk in the queue.
+ * render as "P4 · unknown · 0 src" junk in the queue. We also require a
+ * `priority:` tag, because legacy seed pages can match the slug or tag
+ * markers but have no metadata, which surfaced as the same junk row.
  */
 export function isCorrelatorIncident(row: IncidentPageRow): boolean {
-  const taggedIncident = (row.tags ?? []).some((t) => t.tag === "incident");
+  const tags = (row.tags ?? []).map((t) => t.tag);
+  const taggedIncident = tags.includes("incident");
   const fromCorrelator =
     (row.frontmatter ?? {})["source"] === "correlator";
-  const slugShaped = row.slug.startsWith("incident-");
-  return taggedIncident || fromCorrelator || slugShaped;
+  const hasPriorityTag = tags.some((t) => t.startsWith("priority:"));
+  return (taggedIncident || fromCorrelator) && hasPriorityTag;
 }
 
 export function rankIncidentPages(
