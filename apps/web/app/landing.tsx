@@ -820,7 +820,7 @@ function FusionDiagram() {
             </text>
             <path
               className="wd-fusion-source-arrow"
-              d={`M180,${y + 20} C 198,${y + 20} 206,140 232,140`}
+              d={`M180,${y + 20} C 188,${y + 20} 192,140 200,140`}
               fill="none"
               stroke={DIAGRAM_STROKE}
               strokeWidth="1"
@@ -830,19 +830,19 @@ function FusionDiagram() {
         );
       })}
 
-      <rect x={216} y={108} width={92} height={64} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={262} y={128} textAnchor="middle" fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+      <rect x={200} y={108} width={124} height={64} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={262} y={130} textAnchor="middle" fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
         CORRELATE
       </text>
-      <text x={262} y={144} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+      <text x={262} y={146} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
         neighborhood · 5–10 min
       </text>
-      <text x={262} y={160} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+      <text x={262} y={160} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
         cluster · escalation · TG
       </text>
 
       <path
-        d="M308,140 L356,140"
+        d="M324,140 L356,140"
         stroke={DIAGRAM_STROKE}
         strokeWidth="1"
         markerEnd="url(#arr-fusion)"
