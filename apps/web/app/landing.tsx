@@ -172,28 +172,58 @@ function useInView<T extends Element>(
 }
 
 function HookStat() {
+  const [ref, inView] = useInView<HTMLDivElement>({ threshold: 0.3 });
+
+  // Slide-in choreography. Each line picks up a stagger delay so the
+  // viewer's eye is pulled left-to-right (kicker -> 62% -> rest).
+  const fadeUp = (delay: number) => ({
+    opacity: inView ? 1 : 0,
+    transform: inView ? "translateY(0)" : "translateY(16px)",
+    transition: `opacity 700ms ease-out ${delay}ms, transform 700ms ease-out ${delay}ms`,
+  });
+  const slideInBig = inView
+    ? {
+        opacity: 1,
+        transform: "translateX(0) scale(1)",
+        transition:
+          "opacity 800ms cubic-bezier(0.16, 1, 0.3, 1) 120ms, transform 800ms cubic-bezier(0.16, 1, 0.3, 1) 120ms",
+      }
+    : { opacity: 0, transform: "translateX(-160px) scale(0.7)" };
+
   return (
-    <section className="border-b border-neutral-200 bg-black text-white">
-      <div className="mx-auto max-w-4xl px-6 py-20 text-center md:py-24">
-        <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
+    <section className="border-b border-neutral-200 bg-black text-white overflow-hidden">
+      <div ref={ref} className="mx-auto max-w-4xl px-6 py-20 text-center md:py-28">
+        <p
+          className="font-mono text-[10px] uppercase tracking-widest text-neutral-400"
+          style={fadeUp(0)}
+        >
           Why this exists
         </p>
         <p className="mt-6 font-mono text-3xl leading-[1.15] tracking-tight md:text-5xl">
           <span
-            className="block tabular-nums text-white"
-            style={{ fontVariantNumeric: "tabular-nums" }}
+            className="block tabular-nums text-white md:text-[7rem] md:leading-none"
+            style={{ fontVariantNumeric: "tabular-nums", ...slideInBig }}
           >
             62%
           </span>
-          <span className="mt-3 block text-neutral-300 md:text-4xl">
+          <span
+            className="mt-4 block text-neutral-300 md:text-4xl"
+            style={fadeUp(420)}
+          >
             of violent crimes in major urban areas go completely{" "}
             <span className="text-white">unreported</span> to law enforcement.
           </span>
         </p>
-        <p className="mt-6 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+        <p
+          className="mt-6 font-mono text-[10px] uppercase tracking-widest text-neutral-500"
+          style={fadeUp(620)}
+        >
           Source · Bureau of Justice Statistics
         </p>
-        <p className="mx-auto mt-8 max-w-2xl font-mono text-xs leading-relaxed text-neutral-300 md:text-base">
+        <p
+          className="mx-auto mt-8 max-w-2xl font-mono text-xs leading-relaxed text-neutral-300 md:text-base"
+          style={fadeUp(780)}
+        >
           A crime that never gets called in still leaves a trace.{" "}
           <span className="text-white">A streetlight catches it.
           A scanner picks up the response. A 911 hangup half-completes.</span>{" "}
@@ -610,7 +640,11 @@ function HowStep({
           transition: "opacity 700ms ease-out, transform 700ms ease-out",
         }}
       >
-        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[2fr_5fr] lg:gap-16">
+        <div
+          className={`grid grid-cols-1 items-center gap-10 lg:gap-16 ${
+            mirror ? "lg:grid-cols-[5fr_2fr]" : "lg:grid-cols-[2fr_5fr]"
+          }`}
+        >
           <div className={mirror ? "lg:order-2" : ""}>
             <div className="flex items-baseline gap-4">
               <span className="font-mono text-5xl leading-none tracking-tight text-neutral-200 tabular-nums">
@@ -1092,7 +1126,35 @@ function DecisionCard({
 }) {
   const isPredicted = kind === "predicted";
   const isDone = state !== "pending";
-  const pctLeft = Math.max(0, Math.min(1, countdown / 30));
+  const initialCountdown = countdown;
+
+  // Live countdown — starts decrementing once the section enters view
+  // (countdownAnimated flips true), stops if the card is reset or the
+  // operator actuates it. At zero, auto-approve fires (the simulated
+  // dispatcher hand-off).
+  const [remaining, setRemaining] = useState(initialCountdown);
+  useEffect(() => {
+    if (state !== "pending") return;
+    setRemaining(initialCountdown);
+  }, [state, initialCountdown]);
+  useEffect(() => {
+    if (state !== "pending" || !countdownAnimated) return;
+    const id = setInterval(() => {
+      setRemaining((r) => {
+        if (r <= 1) {
+          clearInterval(id);
+          // schedule the auto-approve on the next tick so React doesn't
+          // call a parent setState from inside a setState updater
+          setTimeout(onApprove, 0);
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [state, countdownAnimated, onApprove]);
+
+  const pctLeft = Math.max(0, Math.min(1, remaining / initialCountdown));
   return (
     <article
       className={[
@@ -1155,8 +1217,8 @@ function DecisionCard({
             {officer}
           </span>
           {!isDone && (
-            <span className="shrink-0 font-mono text-[9px] uppercase tracking-widest text-neutral-500">
-              Auto in {countdown}s
+            <span className="shrink-0 font-mono tabular-nums text-[9px] uppercase tracking-widest text-neutral-500">
+              Auto in {remaining}s
             </span>
           )}
         </div>
@@ -1165,10 +1227,8 @@ function DecisionCard({
             <div
               className="h-full bg-black"
               style={{
-                width: countdownAnimated ? `${pctLeft * 100}%` : "0%",
-                transition: countdownAnimated
-                  ? "width 900ms ease-out 400ms"
-                  : "none",
+                width: `${pctLeft * 100}%`,
+                transition: "width 900ms linear",
               }}
             />
           </div>
