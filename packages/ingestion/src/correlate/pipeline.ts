@@ -18,7 +18,11 @@ import { normalizeSignal, selectWindow, type RawRow } from "./window";
 import { anomaly, rankIncidents, scoreIncident } from "./score";
 import { buildIncidentPages, type IncidentPage } from "./pages";
 import { writeIncidentPages } from "./gbrain-writer";
-import { deterministicNarrate, type Adjudicator } from "./adjudicate";
+import {
+  deterministicNarrate,
+  deterministicResolve,
+  type Adjudicator,
+} from "./adjudicate";
 import type { CandidateCluster, ScoredIncident } from "./types";
 
 export interface DatasfBaselineRow {
@@ -115,9 +119,12 @@ export async function correlate(input: CorrelateInput): Promise<{
 
   const { clusters, ambiguous } = cluster(live);
 
-  // Apply adjudicator decisions on ambiguous pairs. An ambiguous signal
-  // is always its own singleton cluster; "merge" folds it into the
-  // referenced cluster.
+  // Resolve ambiguous pairs deterministically. The merge/split call is
+  // a binary geometric decision the deterministic rule already makes
+  // well; routing every pair through the LLM was an unbounded,
+  // per-pair network cost with negligible quality gain. The LLM seam
+  // stays for the (bounded, top-N) rationale only. An ambiguous signal
+  // is always its own singleton cluster; "merge" folds it in.
   const byId = new Map<string, CandidateCluster>();
   for (const c of clusters) byId.set(c.id, c);
   let resolvedMerges = 0;
@@ -128,12 +135,7 @@ export async function correlate(input: CorrelateInput): Promise<{
       (c) => c.signals.length === 1 && c.signals[0]?.id === amb.signalId,
     );
     if (!singleton) continue;
-    const decision = await input.adjudicator.resolveAmbiguous(amb, {
-      signalAffinity: singleton.signals[0]?.affinityGroup ?? "unknown",
-      clusterAffinity: target.signals[0]?.affinityGroup ?? "unknown",
-      neighborhood: target.neighborhood,
-    });
-    if (decision !== "merge") continue;
+    if (deterministicResolve(amb) !== "merge") continue;
     byId.delete(singleton.id);
     byId.delete(target.id);
     const merged = refinalize([...target.signals, ...singleton.signals]);
@@ -147,23 +149,30 @@ export async function correlate(input: CorrelateInput): Promise<{
   const ranked = rankIncidents(scored);
 
   // Only the top-N get an LLM rationale (bounded cost/latency — the
-  // spec's LLM guardrail); the rest use the instant deterministic one.
-  for (let idx = 0; idx < ranked.length; idx += 1) {
-    const inc = ranked[idx]!;
-    const ctx = contextFor(contexts, inc.cluster.neighborhood);
-    const narrateInput = {
-      tier: inc.tier,
-      factors: inc.factors,
-      sourceCount: new Set(inc.cluster.signals.map((s) => s.source)).size,
-      neighborhood: inc.cluster.neighborhood,
-      affinityGroup: inc.cluster.signals[0]?.affinityGroup ?? "unknown",
-      anomalyRatio: anomaly(inc.cluster, ctx).ratio,
-    };
-    inc.rationale =
-      idx < NARRATE_TOP_N
-        ? await input.adjudicator.narrate(narrateInput)
-        : deterministicNarrate(narrateInput);
+  // spec's LLM guardrail), and those run concurrently rather than
+  // sequentially. The rest use the instant deterministic narrative.
+  const narrateInputs = ranked.map((inc) => ({
+    tier: inc.tier,
+    factors: inc.factors,
+    sourceCount: new Set(inc.cluster.signals.map((s) => s.source)).size,
+    neighborhood: inc.cluster.neighborhood,
+    affinityGroup: inc.cluster.signals[0]?.affinityGroup ?? "unknown",
+    anomalyRatio: anomaly(
+      inc.cluster,
+      contextFor(contexts, inc.cluster.neighborhood),
+    ).ratio,
+  }));
+  for (let idx = NARRATE_TOP_N; idx < ranked.length; idx += 1) {
+    ranked[idx]!.rationale = deterministicNarrate(narrateInputs[idx]!);
   }
+  const topCount = Math.min(NARRATE_TOP_N, ranked.length);
+  await Promise.all(
+    Array.from({ length: topCount }, async (_, idx) => {
+      ranked[idx]!.rationale = await input.adjudicator.narrate(
+        narrateInputs[idx]!,
+      );
+    }),
+  );
 
   const pages = buildIncidentPages(ranked, now);
   const byTier: Record<string, number> = {};

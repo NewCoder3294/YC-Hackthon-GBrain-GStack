@@ -46,22 +46,39 @@ async function upsertOne(db: Db, page: IncidentPage): Promise<void> {
   }
 }
 
-/** Upsert each incident page; one failure never aborts the rest. */
+/** Bounded write concurrency — fast without flooding the connection. */
+const WRITE_CONCURRENCY = 8;
+
+/**
+ * Upsert incident pages in bounded-concurrency batches; one failure
+ * never aborts the rest (per-page isolation preserved).
+ */
 export async function writeIncidentPages(
   db: Db,
   pages: readonly IncidentPage[],
 ): Promise<WriteResult> {
   const failures: { slug: string; message: string }[] = [];
   let written = 0;
-  for (const page of pages) {
-    try {
-      await upsertOne(db, page);
-      written += 1;
-    } catch (err: unknown) {
-      failures.push({
-        slug: page.slug,
-        message: err instanceof Error ? err.message : String(err),
-      });
+
+  for (let i = 0; i < pages.length; i += WRITE_CONCURRENCY) {
+    const batch = pages.slice(i, i + WRITE_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (page) => {
+        try {
+          await upsertOne(db, page);
+          return { ok: true as const };
+        } catch (err: unknown) {
+          return {
+            ok: false as const,
+            slug: page.slug,
+            message: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }),
+    );
+    for (const r of results) {
+      if (r.ok) written += 1;
+      else failures.push({ slug: r.slug, message: r.message });
     }
   }
   return { written, failures };
