@@ -200,6 +200,7 @@ function GraphInner({ nodes, edges }: Props) {
   );
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [highlightedIds, setHighlightedIds] = useState<Set<string> | null>(null);
   const [tracing, setTracing] = useState(false);
   const traceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reactFlow = useReactFlow();
@@ -310,7 +311,9 @@ function GraphInner({ nodes, edges }: Props) {
 
         let state: KgNodeData["state"] = "default";
         if (isFocus) state = "focused";
-        else if (focusNeighborhood) {
+        else if (highlightedIds) {
+          state = highlightedIds.has(kgNode.id) ? "highlighted" : "dimmed";
+        } else if (focusNeighborhood) {
           state = inFocusHood ? "highlighted" : "dimmed";
         } else if (query.trim() && !queryMatches.has(kgNode.id)) {
           state = "dimmed";
@@ -342,13 +345,24 @@ function GraphInner({ nodes, edges }: Props) {
           tracing &&
           focusNeighborhood &&
           focusNeighborhood.edges.has(edge.id);
+        const bothInHighlight =
+          highlightedIds != null &&
+          highlightedIds.has(edge.source) &&
+          highlightedIds.has(edge.target);
 
         let stroke = "#404040";
         let opacity = 1;
         let strokeWidth = 1;
         let animated = false;
 
-        if (focusNeighborhood) {
+        if (highlightedIds) {
+          if (bothInHighlight) {
+            stroke = "#000000";
+            strokeWidth = 1.5;
+          } else {
+            opacity = 0.1;
+          }
+        } else if (focusNeighborhood) {
           if (inFocusHood) {
             stroke = "#000000";
             strokeWidth = 1.5;
@@ -376,6 +390,7 @@ function GraphInner({ nodes, edges }: Props) {
     query,
     focusedId,
     focusNeighborhood,
+    highlightedIds,
     tracing,
     setRfNodes,
     setRfEdges,
@@ -415,8 +430,43 @@ function GraphInner({ nodes, edges }: Props) {
     [reactFlow],
   );
 
+  const focusInGraph = useCallback(
+    (id: string) => {
+      setFocusedId(id);
+      const rfNode = reactFlow.getNode(id);
+      if (rfNode) {
+        reactFlow.fitView({ nodes: [{ id }], padding: 0.5, duration: 400 });
+      }
+    },
+    [reactFlow],
+  );
+
+  const highlightNodes = useCallback(
+    (ids: string[]) => {
+      const valid = ids.filter((id) => reactFlow.getNode(id));
+      if (valid.length === 0) return;
+      setHighlightedIds(new Set(valid));
+      setFocusedId(null);
+      setSelectedId(null);
+      reactFlow.fitView({
+        nodes: valid.map((id) => ({ id })),
+        padding: 0.3,
+        duration: 600,
+        maxZoom: 1.2,
+      });
+    },
+    [reactFlow],
+  );
+
+  const clearHighlight = useCallback(() => {
+    setHighlightedIds(null);
+    setFocusedId(null);
+    reactFlow.fitView({ padding: 0.15, duration: 400 });
+  }, [reactFlow]);
+
   const clearFocus = useCallback(() => {
     setFocusedId(null);
+    setHighlightedIds(null);
     setTracing(false);
     if (traceTimerRef.current) {
       clearTimeout(traceTimerRef.current);
@@ -512,7 +562,16 @@ function GraphInner({ nodes, edges }: Props) {
         />
       )}
 
-      {!selectedNode && <GbrainQueryPanel onFocusGbrainId={(id) => focusOnNode(id)} />}
+      {!selectedNode && (
+        <GbrainQueryPanel
+          nodes={nodes}
+          edges={edges}
+          onFocusGbrainId={(id) => focusOnNode(id)}
+          onFocusInGraph={focusInGraph}
+          onHighlightIds={highlightNodes}
+          onClearHighlight={clearHighlight}
+        />
+      )}
 
       {KIND_ORDER.length === 0 && null}
     </div>
