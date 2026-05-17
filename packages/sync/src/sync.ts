@@ -26,6 +26,11 @@ export async function syncCameras(
     return { count: 0, syncedAt: new Date() };
   }
 
+  // Note: `isActive` is intentionally NOT updated on conflict. It is owned by
+  // the liveness probe (`probeCameraLiveness`) after the row is first
+  // inserted. CalTrans's `inService` flag is the seed value but is unreliable
+  // (many streams it reports as in-service are 404 at the CDN). New rows
+  // still get CalTrans's `is_active` value because `set` only runs on update.
   await deps.db
     .insert(cameras)
     .values(rows)
@@ -41,7 +46,6 @@ export async function syncCameras(
         lng: sql`excluded.lng`,
         streamUrl: sql`excluded.stream_url`,
         streamType: sql`excluded.stream_type`,
-        isActive: sql`excluded.is_active`,
         lastSyncedAt: sql`now()`,
       },
     });

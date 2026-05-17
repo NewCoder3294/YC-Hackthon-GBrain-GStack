@@ -7,6 +7,10 @@ import { enrichIncident } from "@/lib/enrichment/pipeline";
 import type { IncidentContext } from "@/lib/enrichment/types";
 
 const MAX_PER_INVOCATION = 5;
+// Each click fans out up to MAX_PER_INVOCATION × (Firecrawl + ZeroEntropy +
+// 3× Claude). Without a cooldown an authed user could repeatedly trigger this
+// and burn the paid-API budget. Gate by the most recent web_context insert.
+const COOLDOWN_MS = 60_000;
 
 interface IncidentRow {
   id: string;
@@ -50,6 +54,32 @@ export async function runEnrichmentNow(): Promise<RunNowResult> {
     };
   }
   const supabase = createServiceClient();
+
+  // Global cooldown — block click-spam that would burn the paid-API budget.
+  // We piggyback on the most-recent web_context insert rather than maintaining
+  // a separate rate-limit table.
+  const { data: latest } = await supabase
+    .from("pages")
+    .select("created_at")
+    .eq("source_id", "watchdog")
+    .eq("type", "web_context")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const latestAt = latest?.[0]?.created_at
+    ? new Date(latest[0].created_at).getTime()
+    : 0;
+  const elapsed = Date.now() - latestAt;
+  if (latestAt && elapsed < COOLDOWN_MS) {
+    const remaining = Math.ceil((COOLDOWN_MS - elapsed) / 1000);
+    return {
+      ok: false,
+      message: `cooldown — try again in ${remaining}s`,
+      candidates: 0,
+      enriched: 0,
+      inserted: 0,
+      errors: [],
+    };
+  }
 
   const { data: alreadyRows, error: enrichedErr } = await supabase
     .from("pages")

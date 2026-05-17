@@ -5,6 +5,9 @@ import type { RankedIncident, Tier } from "@/lib/incidents/ranked";
 
 interface Props {
   initial: RankedIncident[];
+  // True when the server kicked correlation in the background because the
+  // most-recent incident page was stale. Affects only the empty-state copy.
+  kickedBackground?: boolean;
 }
 
 const POLL_MS = 15_000;
@@ -24,7 +27,7 @@ function ageLabel(iso: string): string {
   return h < 24 ? `${h}h ago` : `${Math.round(h / 24)}d ago`;
 }
 
-export function TriageQueue({ initial }: Props) {
+export function TriageQueue({ initial, kickedBackground = false }: Props) {
   const [incidents, setIncidents] = useState<RankedIncident[]>(initial);
   const [open, setOpen] = useState<string | null>(null);
   const [live, setLive] = useState(false);
@@ -60,12 +63,23 @@ export function TriageQueue({ initial }: Props) {
 
   if (incidents.length === 0) {
     return (
-      <div className="border border-dashed border-neutral-300 p-8 text-center font-mono text-xs text-neutral-500">
-        No active incidents. Run{" "}
-        <code className="bg-neutral-100 px-1">
-          pnpm --filter @caltrans/ingestion correlate
-        </code>{" "}
-        to correlate the signal window.
+      <div className="flex flex-col items-center gap-2 border border-dashed border-neutral-300 p-8 text-center font-mono text-xs text-neutral-500">
+        {kickedBackground ? (
+          <>
+            <span className="flex items-center gap-2">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-neutral-500" />
+              <span className="uppercase tracking-widest">
+                Correlator running
+              </span>
+            </span>
+            <span>
+              No active incidents in the current signal window. Re-checking
+              every 15s.
+            </span>
+          </>
+        ) : (
+          <span>No active incidents in the current signal window.</span>
+        )}
       </div>
     );
   }

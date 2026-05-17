@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useTransition } from "react";
 import { Input } from "@/components/ui/input";
@@ -50,7 +51,7 @@ export function LiveFilters({ neighborhoods }: Props) {
       }
       const qs = next.toString();
       startTransition(() => {
-        router.replace(qs ? `/live?${qs}` : "/live");
+        router.replace((qs ? `/live?${qs}` : "/live") as Route);
       });
     },
     [params, router],

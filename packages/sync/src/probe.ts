@@ -1,20 +1,29 @@
 import { cameras, type Db } from "@caltrans/db";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 export interface ProbeDeps {
   db: Db;
   fetch: typeof globalThis.fetch;
   concurrency?: number;
   timeoutMs?: number;
+  // If the fraction of previously-active cameras now failing exceeds this,
+  // assume a transient outage and skip writes. Default 0.5.
+  abortThreshold?: number;
 }
 
 export interface ProbeResult {
   probed: number;
   dead: number;
+  revived: number;
+  aborted: boolean;
   durationMs: number;
 }
 
-const DEFAULTS = { concurrency: 20, timeoutMs: 6000 } as const;
+const DEFAULTS = {
+  concurrency: 20,
+  timeoutMs: 6000,
+  abortThreshold: 0.5,
+} as const;
 
 async function probeOne(
   url: string,
@@ -47,18 +56,26 @@ async function probeOne(
 export async function probeCameraLiveness(deps: ProbeDeps): Promise<ProbeResult> {
   const concurrency = deps.concurrency ?? DEFAULTS.concurrency;
   const timeoutMs = deps.timeoutMs ?? DEFAULTS.timeoutMs;
+  const abortThreshold = deps.abortThreshold ?? DEFAULTS.abortThreshold;
   const start = Date.now();
 
+  // Probe every camera, including currently-inactive ones, so streams that
+  // come back online get revived. The cost of probing dead URLs is bounded
+  // by `timeoutMs`.
   const rows = await deps.db
-    .select({ id: cameras.id, url: cameras.streamUrl })
-    .from(cameras)
-    .where(eq(cameras.isActive, true));
+    .select({
+      id: cameras.id,
+      url: cameras.streamUrl,
+      isActive: cameras.isActive,
+    })
+    .from(cameras);
 
   if (rows.length === 0) {
-    return { probed: 0, dead: 0, durationMs: Date.now() - start };
+    return { probed: 0, dead: 0, revived: 0, aborted: false, durationMs: Date.now() - start };
   }
 
-  const deadIds: string[] = [];
+  type Probed = { id: string; wasActive: boolean; alive: boolean };
+  const results: Probed[] = [];
   let cursor = 0;
   async function worker() {
     while (true) {
@@ -66,16 +83,28 @@ export async function probeCameraLiveness(deps: ProbeDeps): Promise<ProbeResult>
       if (i >= rows.length) return;
       const row = rows[i]!;
       const alive = await probeOne(row.url, deps.fetch, timeoutMs);
-      if (!alive) deadIds.push(row.id);
+      results.push({ id: row.id, wasActive: row.isActive, alive });
     }
   }
   const workerCount = Math.min(concurrency, rows.length);
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-  if (deadIds.length > 0) {
+  const toDeactivate = results.filter((r) => r.wasActive && !r.alive);
+  const toRevive = results.filter((r) => !r.wasActive && r.alive);
+  const activeCount = results.filter((r) => r.wasActive).length;
+
+  // Transient-outage safety net: if more than `abortThreshold` of previously-
+  // active cameras suddenly fail in a single run, assume the worker's
+  // egress is flaky and skip writes. Revivals are still safe to apply
+  // because a successful HTTP response cannot be confused with an outage.
+  const aborted =
+    activeCount > 0 && toDeactivate.length / activeCount > abortThreshold;
+
+  if (!aborted && toDeactivate.length > 0) {
     const CHUNK = 200;
-    for (let i = 0; i < deadIds.length; i += CHUNK) {
-      const slice = deadIds.slice(i, i + CHUNK);
+    const ids = toDeactivate.map((r) => r.id);
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
       await deps.db
         .update(cameras)
         .set({ isActive: false })
@@ -83,5 +112,23 @@ export async function probeCameraLiveness(deps: ProbeDeps): Promise<ProbeResult>
     }
   }
 
-  return { probed: rows.length, dead: deadIds.length, durationMs: Date.now() - start };
+  if (toRevive.length > 0) {
+    const CHUNK = 200;
+    const ids = toRevive.map((r) => r.id);
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const slice = ids.slice(i, i + CHUNK);
+      await deps.db
+        .update(cameras)
+        .set({ isActive: true })
+        .where(inArray(cameras.id, slice));
+    }
+  }
+
+  return {
+    probed: rows.length,
+    dead: aborted ? 0 : toDeactivate.length,
+    revived: toRevive.length,
+    aborted,
+    durationMs: Date.now() - start,
+  };
 }
