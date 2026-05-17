@@ -46,7 +46,7 @@ const incident: ScoredIncident = {
 };
 
 describe("buildIncidentPages", () => {
-  const [p] = buildIncidentPages([incident], NOW);
+  const p = buildIncidentPages([incident], NOW)[0]!;
 
   it("uses cluster id as slug and type incident", () => {
     expect(p.slug).toBe("incident-deadbeef");

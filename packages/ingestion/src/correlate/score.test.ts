@@ -147,6 +147,6 @@ describe("scoreIncident + rankIncidents", () => {
       rationale: "",
     };
     const b: ScoredIncident = { ...a, priority: 0.9, tier: "P1" };
-    expect(rankIncidents([a, b])[0].priority).toBe(0.9);
+    expect(rankIncidents([a, b])[0]!.priority).toBe(0.9);
   });
 });

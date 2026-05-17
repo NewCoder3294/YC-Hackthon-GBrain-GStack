@@ -55,14 +55,16 @@ function buildBody(i: ScoredIncident): string {
   const f = i.factors;
   const span = i.cluster.signals;
   const first = span[0];
-  const last = span[span.length - 1];
+  const last = span[span.length - 1] ?? first;
   const group = first?.affinityGroup ?? "unknown";
+  const firstAt = first?.occurredAt ?? new Date().toISOString();
+  const lastAt = last?.occurredAt ?? firstAt;
   const sources = [...new Set(span.map((s) => s.source))].sort().join(", ");
   return [
     `**${i.tier}** correlated incident in **${i.cluster.neighborhood}** ` +
       `(${group}).`,
     "",
-    `**Window:** ${hhmm(first.occurredAt)}–${hhmm(last.occurredAt)} · ` +
+    `**Window:** ${hhmm(firstAt)}–${hhmm(lastAt)} · ` +
       `${span.length} signal(s) · sources: ${sources}` +
       (i.cluster.hasDatasfDup ? " · includes a DataSF filed record" : ""),
     "",

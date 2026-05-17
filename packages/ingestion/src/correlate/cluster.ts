@@ -55,6 +55,7 @@ function minDistanceMeters(s: LiveSignal, c: OpenCluster): number {
 
 function withinTime(s: LiveSignal, c: OpenCluster): boolean {
   const latest = c.signals[c.signals.length - 1];
+  if (latest === undefined) return true;
   const gapMs = Math.abs(
     new Date(s.occurredAt).getTime() - new Date(latest.occurredAt).getTime(),
   );

@@ -31,7 +31,7 @@ describe("cluster", () => {
       sig({ id: "b", lat: 37.7601, lng: -122.4101, occurredAt: minsLater(2) }),
     ]);
     expect(clusters).toHaveLength(1);
-    expect(clusters[0].signals.map((s) => s.id)).toEqual(["a", "b"]);
+    expect(clusters[0]!.signals.map((s) => s.id)).toEqual(["a", "b"]);
     expect(ambiguous).toHaveLength(0);
   });
 
@@ -98,14 +98,14 @@ describe("cluster", () => {
       }),
     ]);
     expect(clusters).toHaveLength(1);
-    expect(clusters[0].hasDatasfDup).toBe(true);
+    expect(clusters[0]!.hasDatasfDup).toBe(true);
   });
 
   it("produces a deterministic id regardless of input order", () => {
     const a = sig({ id: "a" });
     const b = sig({ id: "b", lat: 37.7601, occurredAt: minsLater(1) });
-    const id1 = cluster([a, b]).clusters[0].id;
-    const id2 = cluster([b, a]).clusters[0].id;
+    const id1 = cluster([a, b]).clusters[0]!.id;
+    const id2 = cluster([b, a]).clusters[0]!.id;
     expect(id1).toBe(id2);
     expect(id1).toMatch(/^incident-[0-9a-f]{8}$/);
   });

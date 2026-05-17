@@ -26,9 +26,9 @@ describe("centroidsFromSignals", () => {
       { neighborhood: " ", lat: 1, lng: 1 },
     ]);
     expect(c).toHaveLength(1);
-    expect(c[0].neighborhood).toBe("Mission");
-    expect(c[0].lat).toBeCloseTo(37.765, 4);
-    expect(c[0].lng).toBeCloseTo(-122.415, 4);
+    expect(c[0]!.neighborhood).toBe("Mission");
+    expect(c[0]!.lat).toBeCloseTo(37.765, 4);
+    expect(c[0]!.lng).toBeCloseTo(-122.415, 4);
   });
 });
 
