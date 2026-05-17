@@ -20,6 +20,9 @@ importers:
       '@caltrans/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@caltrans/ingestion':
+        specifier: workspace:*
+        version: link:../../packages/ingestion
       '@caltrans/sync':
         specifier: workspace:*
         version: link:../../packages/sync
