@@ -18,7 +18,7 @@ const sample: NewCamera = {
 
 describe("syncCameras", () => {
   it("fetches, parses, and upserts cameras", async () => {
-    const fakeFetch = vi.fn().mockResolvedValue(
+    const mockFetch = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
           data: [
@@ -52,7 +52,7 @@ describe("syncCameras", () => {
     );
 
     const upserts: NewCamera[] = [];
-    const fakeDb = {
+    const mockDb = {
       insert: () => ({
         values: (rows: NewCamera[]) => ({
           onConflictDoUpdate: () => {
@@ -64,8 +64,8 @@ describe("syncCameras", () => {
     };
 
     const result = await syncCameras({
-      db: fakeDb as never,
-      fetch: fakeFetch as never,
+      db: mockDb as never,
+      fetch: mockFetch as never,
       url: "https://caltrans/d4.json",
     });
 
@@ -76,15 +76,15 @@ describe("syncCameras", () => {
       route: "I-880",
       streamType: "hls",
     });
-    expect(fakeFetch).toHaveBeenCalledWith("https://caltrans/d4.json", expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith("https://caltrans/d4.json", expect.any(Object));
   });
 
   it("throws on non-200 response", async () => {
-    const fakeFetch = vi.fn().mockResolvedValue(new Response("nope", { status: 503 }));
+    const mockFetch = vi.fn().mockResolvedValue(new Response("nope", { status: 503 }));
     await expect(
       syncCameras({
         db: {} as never,
-        fetch: fakeFetch as never,
+        fetch: mockFetch as never,
         url: "https://x",
       }),
     ).rejects.toThrow(/503/);

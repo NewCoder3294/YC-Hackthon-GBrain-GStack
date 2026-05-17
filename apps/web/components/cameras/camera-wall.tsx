@@ -18,7 +18,7 @@ const GRID_OPTIONS = [
 
 type StreamFilter = "all" | "hls" | "mjpeg";
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 20;
 
 export function CameraWall({ cameras }: Props) {
   const [grid, setGrid] = useState<(typeof GRID_OPTIONS)[number]>(GRID_OPTIONS[1]);
@@ -52,7 +52,9 @@ export function CameraWall({ cameras }: Props) {
     return ["ALL", ...Array.from(set).sort()];
   }, [cameras]);
 
-  const filtered = useMemo(() => {
+  // Base filters (route/stream/search) — stable across status changes so the
+  // grid's anchor cameras don't reshuffle each time a tile flips to offline.
+  const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return cameras
       .filter((c) => stream === "all" || c.streamType === stream)
@@ -62,11 +64,38 @@ export function CameraWall({ cameras }: Props) {
           !q ||
           c.description.toLowerCase().includes(q) ||
           c.route.toLowerCase().includes(q),
-      )
-      .filter((c) => !hideOffline || !offlineIds.has(c.id));
-  }, [cameras, stream, route, query, hideOffline, offlineIds]);
+      );
+  }, [cameras, stream, route, query]);
 
-  const visible = filtered.slice(0, visibleCount);
+  // The window of cameras the user has loaded — independent of offline status.
+  const pageWindow = useMemo(
+    () => baseFiltered.slice(0, visibleCount),
+    [baseFiltered, visibleCount],
+  );
+
+  // Within that window, drop offline tiles. Result: as tiles flip offline they
+  // disappear from the grid, but no new tile slides up from beyond the window
+  // to take their slot — anchor cameras keep their visual position.
+  const visible = useMemo(
+    () => (hideOffline ? pageWindow.filter((c) => !offlineIds.has(c.id)) : pageWindow),
+    [pageWindow, hideOffline, offlineIds],
+  );
+
+  // Total currently displayable for the counter line below.
+  const filtered = useMemo(
+    () => (hideOffline ? baseFiltered.filter((c) => !offlineIds.has(c.id)) : baseFiltered),
+    [baseFiltered, hideOffline, offlineIds],
+  );
+
+  // As tiles within the current window flip offline, the window shrinks. Grow
+  // the window from the tail (never from the middle, so anchor positions stay
+  // stable) until we're back at ~PAGE_SIZE visible — or run out of candidates.
+  useEffect(() => {
+    if (!hideOffline) return;
+    if (visible.length >= PAGE_SIZE) return;
+    if (visibleCount >= baseFiltered.length) return;
+    setVisibleCount((c) => Math.min(c + PAGE_SIZE, baseFiltered.length));
+  }, [visible.length, hideOffline, baseFiltered.length, visibleCount]);
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -140,7 +169,7 @@ export function CameraWall({ cameras }: Props) {
           title="Hide cameras reporting no signal"
         >
           <span className={cn("h-1.5 w-1.5", hideOffline ? "bg-white" : "bg-neutral-300")} />
-          Offline
+          Online
         </button>
 
         <label className="ml-auto flex items-center gap-2">

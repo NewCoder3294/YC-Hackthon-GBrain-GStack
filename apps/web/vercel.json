@@ -5,6 +5,18 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/enrich-incidents",
+      "schedule": "0 0,12 * * *"
+    },
+    {
+      "path": "/api/cron/sync-live-incidents",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/correlate",
+      "schedule": "*/10 * * * *"
+    },
+    {
       "path": "/api/cron/notify-contributors",
       "schedule": "0 * * * *"
     }

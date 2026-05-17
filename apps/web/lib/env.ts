@@ -9,6 +9,15 @@ const schema = z.object({
   TWILIO_ACCOUNT_SID: z.string().min(10).optional(),
   TWILIO_AUTH_TOKEN: z.string().min(10).optional(),
   TWILIO_FROM_NUMBER: z.string().regex(/^\+\d{10,15}$/).optional(),
+  FIRECRAWL_API_KEY: z.string().min(8).optional(),
+  ZEROENTROPY_API_KEY: z.string().min(8).optional(),
+  ANTHROPIC_API_KEY: z.string().min(8).optional(),
+  // 511.org Open Data API key — required for traffic/transit sync.
+  // Get one (free, instant) at https://511.org/open-data/token.
+  SF_511_API_KEY: z.string().min(8).optional(),
+  // DataSF Socrata app token — optional, raises rate limit from
+  // ~1k/hr to ~10k/hr per IP. Register at https://data.sfgov.org/profile/edit/developer_settings.
+  SOCRATA_APP_TOKEN: z.string().min(8).optional(),
 });
 
 const blank = (v: string | undefined) => (v && v.length > 0 ? v : undefined);
@@ -22,4 +31,9 @@ export const env = schema.parse({
   TWILIO_ACCOUNT_SID: blank(process.env.TWILIO_ACCOUNT_SID),
   TWILIO_AUTH_TOKEN: blank(process.env.TWILIO_AUTH_TOKEN),
   TWILIO_FROM_NUMBER: blank(process.env.TWILIO_FROM_NUMBER),
+  FIRECRAWL_API_KEY: blank(process.env.FIRECRAWL_API_KEY),
+  ZEROENTROPY_API_KEY: blank(process.env.ZEROENTROPY_API_KEY),
+  ANTHROPIC_API_KEY: blank(process.env.ANTHROPIC_API_KEY),
+  SF_511_API_KEY: blank(process.env.SF_511_API_KEY),
+  SOCRATA_APP_TOKEN: blank(process.env.SOCRATA_APP_TOKEN),
 });

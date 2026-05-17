@@ -4,9 +4,11 @@ import { notFound } from "next/navigation";
 import { getClipSignedUrl, getIncident } from "../data";
 import { ClipThumbnail } from "../clip-thumbnail";
 import { LiveMjpeg } from "../live-mjpeg";
+import { LiveStream } from "@/components/cameras/live-stream";
 import { thumbnailUrl } from "../thumbnail-url";
 import { EditIncidentForm } from "./edit-form";
 import { TagEditor } from "./tag-editor";
+import { PriorContext } from "./prior-context";
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -14,11 +16,31 @@ function formatTimestamp(iso: string): string {
   return d.toISOString().slice(0, 19).replace("T", " ");
 }
 
+function formatRelative(iso: string): string {
+  const dt = Date.now() - new Date(iso).getTime();
+  if (dt < 60_000) return `${Math.max(1, Math.floor(dt / 1000))}s ago`;
+  if (dt < 3_600_000) return `${Math.floor(dt / 60_000)}m ago`;
+  if (dt < 86_400_000) return `${Math.floor(dt / 3_600_000)}h ago`;
+  return `${Math.floor(dt / 86_400_000)}d ago`;
+}
+
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+const SEVERITY_STRIPE: Record<"low" | "med" | "high", string> = {
+  high: "bg-black",
+  med: "bg-neutral-700",
+  low: "bg-neutral-300",
+};
+
+const SEVERITY_BADGE: Record<"low" | "med" | "high", string> = {
+  high: "bg-black text-white",
+  med: "border border-neutral-700 bg-white text-neutral-800",
+  low: "border border-neutral-300 bg-white text-neutral-500",
+};
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -45,28 +67,35 @@ export default async function IncidentDetailPage({ params }: PageProps) {
 
   return (
     <section className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
-        <div className="flex items-baseline gap-3">
+      <div className={`h-1 w-full ${SEVERITY_STRIPE[incident.severity]}`} aria-hidden />
+
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
           <Link
             href="/incidents"
-            className="font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black"
+            className="shrink-0 font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black"
           >
             ← Incidents
           </Link>
-          <h1 className="font-mono text-sm uppercase tracking-widest">
+          <span
+            className={`shrink-0 px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-widest ${SEVERITY_BADGE[incident.severity]}`}
+          >
+            {incident.severity}
+          </span>
+          <h1 className="min-w-0 truncate font-mono text-sm text-black">
             {incident.title}
           </h1>
         </div>
-        <div className="flex items-baseline gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+        <div className="flex shrink-0 items-baseline gap-4 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           {primary && (
-            <span>
-              <span className="text-neutral-300">Incident</span>{" "}
-              <span className="text-black">{formatTimestamp(primary.startedAt)}</span>
+            <span title={formatTimestamp(primary.startedAt)}>
+              <span className="text-neutral-300">Observed</span>{" "}
+              <span className="text-black">{formatRelative(primary.startedAt)}</span>
             </span>
           )}
-          <span>
+          <span title={formatTimestamp(incident.createdAt)}>
             <span className="text-neutral-300">Logged</span>{" "}
-            {formatTimestamp(incident.createdAt)}
+            <span className="text-black">{formatRelative(incident.createdAt)}</span>
           </span>
         </div>
       </header>
@@ -134,42 +163,79 @@ export default async function IncidentDetailPage({ params }: PageProps) {
           )}
         </main>
 
-        <aside className="overflow-y-auto p-6">
-          <EditIncidentForm
-            id={incident.id}
-            initialTitle={incident.title}
-            initialNotes={incident.notes ?? ""}
-            initialSeverity={incident.severity}
-          />
+        <aside className="flex flex-col divide-y divide-neutral-200 overflow-y-auto">
+          <Section title="Identity">
+            <EditIncidentForm
+              id={incident.id}
+              initialTitle={incident.title}
+              initialNotes={incident.notes ?? ""}
+              initialSeverity={incident.severity}
+            />
+          </Section>
 
           {primary && (
-            <div className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
-              <h2 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-                Tags{" "}
-                <span className="text-neutral-300">· primary clip</span>
-              </h2>
+            <Section
+              title="Tags"
+              hint="primary clip"
+              count={primary.tags.length}
+            >
               <TagEditor
                 incidentId={incident.id}
                 clipId={primary.id}
                 initialTags={primary.tags}
               />
-            </div>
+            </Section>
           )}
 
+          <Section title="Prior Context" hint="GBrain">
+            <PriorContext incidentId={incident.id} />
+          </Section>
+
           {primary && signedUrl && (
-            <div className="mt-8 border-t border-neutral-200 pt-6">
+            <Section title="Clip">
               <a
                 href={signedUrl}
                 download
-                className="font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black"
+                className="inline-flex items-center gap-1 border border-neutral-200 px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-neutral-600 hover:border-black hover:text-black"
               >
-                ↓ Download original clip
+                ↓ Download original
               </a>
-            </div>
+            </Section>
           )}
         </aside>
       </div>
     </section>
+  );
+}
+
+function Section({
+  title,
+  hint,
+  count,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  count?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="px-5 py-5">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 className="font-mono text-[10px] uppercase tracking-widest text-neutral-700">
+          {title}
+          {hint && (
+            <span className="ml-2 text-neutral-300">· {hint}</span>
+          )}
+        </h2>
+        {typeof count === "number" && (
+          <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+            {count}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
   );
 }
 
@@ -192,6 +258,8 @@ function ClipViewer({
 }) {
   const showLiveMjpeg =
     !signedUrl && liveStreamType === "mjpeg" && !!liveStreamUrl;
+  const showLiveHls =
+    !signedUrl && liveStreamType === "hls" && !!liveStreamUrl;
 
   return (
     <div className="space-y-3">
@@ -206,15 +274,23 @@ function ClipViewer({
           />
         ) : showLiveMjpeg ? (
           <LiveMjpeg streamUrl={liveStreamUrl!} badgeLabel="Camera live · clip pending" />
+        ) : showLiveHls ? (
+          <>
+            <LiveStream
+              streamUrl={liveStreamUrl!}
+              streamType="hls"
+              showLiveDot
+              className="h-full w-full"
+            />
+            <span className="pointer-events-none absolute left-2 top-2 border border-white/40 bg-black/60 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest text-white">
+              live · clip pending
+            </span>
+          </>
         ) : (
           <ClipThumbnail
             path={fallbackThumbnail}
             aspect="video"
-            label={
-              liveStreamType === "hls"
-                ? "Clip pending — live HLS feed available on Wall"
-                : "Clip unavailable"
-            }
+            label="Clip unavailable"
             className="!border-0"
           />
         )}

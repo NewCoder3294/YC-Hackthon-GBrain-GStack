@@ -10,7 +10,8 @@ export type KgNodeKind =
   | "baseline"
   | "location"
   | "decision"
-  | "dispatch";
+  | "dispatch"
+  | "web_context";
 
 export interface KgNode {
   id: string;
@@ -41,6 +42,7 @@ export const KIND_LABEL: Record<KgNodeKind, string> = {
   location: "Location",
   decision: "Decision",
   dispatch: "Dispatch",
+  web_context: "Web context",
 };
 
 // Display order in toolbar (groups: people → places → history → live → analysis)
@@ -57,6 +59,7 @@ export const KIND_ORDER: KgNodeKind[] = [
   "decision",
   "pattern",
   "baseline",
+  "web_context",
 ];
 
 // Columnar layout. Lower = more leftward.
@@ -73,4 +76,5 @@ export const KIND_COLUMN: Record<KgNodeKind, number> = {
   decision: 5,
   pattern: 6,
   baseline: 7,
+  web_context: 8,
 };

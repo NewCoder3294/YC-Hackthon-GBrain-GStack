@@ -2,11 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { KgEdge, KgNode } from "@/components/kg/types";
 import { isHighPriority, priorityLabel } from "@/lib/dispatch";
-import { scanDispatchAudio } from "@/lib/dispatch-audio-scan";
-import {
-  createSimulatorState,
-  nextDispatchCall,
-} from "@/lib/dispatch-simulator";
+import { loadDispatchCatalog } from "@/lib/dispatch-catalog";
+import { createFeedCursor, nextDispatch } from "@/lib/dispatch-feed";
 
 interface GangRow {
   id: string;
@@ -68,9 +65,33 @@ interface DecisionRow {
   decided_at: string;
 }
 
-interface GbrainRecordRow {
+interface GbrainPageRow {
+  id: number;
+  slug: string;
+  type: string;
+  title: string;
+  compiled_truth: string;
+  frontmatter: {
+    legacy_id?: string | null;
+    related_incident_id?: string | null;
+    related_gang_id?: string | null;
+    confidence?: number | string | null;
+    samples?: number | null;
+    source?: string | null;
+    // web_context-only fields
+    url?: string | null;
+    verdict?: "corroborate" | "neutral" | "contradict" | null;
+    reasoning?: string | null;
+    relevance?: number | null;
+    source_host?: string | null;
+  } | null;
+  updated_at: string;
+  tags: { tag: string }[] | null;
+}
+
+interface GbrainRecordView {
   id: string;
-  kind: "pattern" | "baseline" | "reviewed_incident" | "intel_note";
+  kind: string;
   title: string;
   body: string;
   tags: string[];
@@ -79,7 +100,11 @@ interface GbrainRecordRow {
   confidence: number | string | null;
   samples: number | null;
   source: string;
-  created_at: string;
+  // web_context-only fields (populated when type === "web_context")
+  url?: string | null;
+  verdict?: "corroborate" | "neutral" | "contradict" | null;
+  relevance?: number | null;
+  source_host?: string | null;
 }
 
 interface GangEventRow {
@@ -183,11 +208,12 @@ export async function loadKgFromSupabase(): Promise<{
       .select("id, incident_id, outcome, reason, reviewer, decided_at")
       .order("decided_at", { ascending: false }),
     supabase
-      .from("gbrain_records")
+      .from("pages")
       .select(
-        "id, kind, title, body, tags, related_incident_id, related_gang_id, confidence, samples, source, created_at",
+        "id, slug, type, title, compiled_truth, frontmatter, updated_at, tags ( tag )",
       )
-      .order("created_at", { ascending: false })
+      .eq("source_id", "watchdog")
+      .order("updated_at", { ascending: false })
       .limit(80),
     supabase
       .from("gang_events")
@@ -196,10 +222,9 @@ export async function loadKgFromSupabase(): Promise<{
       )
       .order("occurred_at", { ascending: false })
       .limit(40),
-    // Real SFPD scanner audio (captured from openmhz.com, stored under
-    // /public/dispatch-audio/). KG generates a small snapshot of recent
-    // calls using the same simulator that drives the live map.
-    scanDispatchAudio(),
+    // Dispatch catalog — KG renders a small snapshot of recent calls
+    // alongside the live map's stream.
+    loadDispatchCatalog(),
   ]);
 
   const gangs = (gangsRes.data ?? []) as GangRow[];
@@ -209,7 +234,27 @@ export async function loadKgFromSupabase(): Promise<{
   const alerts = (alertsRes.data ?? []) as AlertRow[];
   const incidents = (incidentsRes.data ?? []) as unknown as IncidentRow[];
   const decisions = (decisionsRes.data ?? []) as DecisionRow[];
-  const gbrainRecords = (gbrainRes.data ?? []) as GbrainRecordRow[];
+  const gbrainPages = (gbrainRes.data ?? []) as GbrainPageRow[];
+  const gbrainRecords: GbrainRecordView[] = gbrainPages.map((p) => {
+    const fm = p.frontmatter ?? {};
+    const legacyId = typeof fm.legacy_id === "string" && fm.legacy_id ? fm.legacy_id : String(p.id);
+    return {
+      id: legacyId,
+      kind: p.type,
+      title: p.title,
+      body: p.compiled_truth,
+      tags: (p.tags ?? []).map((t) => t.tag),
+      related_incident_id: fm.related_incident_id ?? null,
+      related_gang_id: fm.related_gang_id ?? null,
+      confidence: fm.confidence ?? null,
+      samples: fm.samples ?? null,
+      source: fm.source ?? "gbrain",
+      url: fm.url ?? null,
+      verdict: fm.verdict ?? null,
+      relevance: fm.relevance ?? null,
+      source_host: fm.source_host ?? null,
+    };
+  });
   const events = (eventsRes.data ?? []) as GangEventRow[];
 
   const nodes: KgNode[] = [];
@@ -388,6 +433,37 @@ export async function loadKgFromSupabase(): Promise<{
           label: "context",
         });
       }
+    } else if (r.kind === "web_context") {
+      const verdict = r.verdict ?? "neutral";
+      const host = r.source_host ?? "";
+      const meta: Record<string, string | number> = { source: r.source };
+      if (r.confidence != null) meta.confidence = Number(r.confidence).toFixed(2);
+      if (r.relevance != null) meta.relevance = Number(r.relevance).toFixed(2);
+      if (host) meta.host = host;
+      meta.verdict = verdict;
+      if (r.url) meta.url = r.url;
+      nodes.push({
+        id: `gbrain:${r.id}`,
+        kind: "web_context",
+        label: r.title || host || "Web result",
+        sub: host ? `${host} · ${verdict}` : verdict,
+        meta,
+        source: "live",
+      });
+      if (r.related_incident_id) {
+        const edgeLabel =
+          verdict === "corroborate"
+            ? "corroborates"
+            : verdict === "contradict"
+              ? "contradicts"
+              : "context";
+        edges.push({
+          id: `e:inc-web:${r.id}`,
+          source: `inc:${r.related_incident_id}`,
+          target: `gbrain:${r.id}`,
+          label: edgeLabel,
+        });
+      }
     }
     // reviewed_incident kind doesn't appear as its own node — it lives behind
     // the decision node and is queryable via the incident's record list.
@@ -435,16 +511,14 @@ export async function loadKgFromSupabase(): Promise<{
     }
   }
 
-  // Dispatch (audio) nodes — generate a snapshot of recent SFPD scanner
-  // calls using the same simulator that drives the live map. KG shows
-  // what the operator has been hearing, with seeded neighborhood location
-  // nodes for place-of-occurrence context. Capped so the graph stays
-  // legible.
+  // Dispatch nodes — recent calls projected into the graph alongside
+  // neighborhood location nodes for place-of-occurrence context. Capped
+  // so the graph stays legible.
   if (audioFiles.length > 0) {
-    const kgSim = createSimulatorState(audioFiles);
+    const kgSim = createFeedCursor(audioFiles);
     const sampleSize = Math.min(20, audioFiles.length * 3);
     for (let i = 0; i < sampleSize; i++) {
-      const call = nextDispatchCall(kgSim);
+      const call = nextDispatch(kgSim);
       const placeName = call.neighborhood || call.district || "SF · unknown area";
       const locId = neighborhoodId(placeName);
       if (!seenLocations.has(locId)) {
