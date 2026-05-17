@@ -602,8 +602,8 @@ export async function loadKgFromSupabase(): Promise<{
     }
     const cam = i.clips[0]?.cameras ?? null;
     if (cam) {
-      const m = matchHotspotByName(`${cam.route} ${cam.description ?? ""}`);
-      if (m) incidentNeighborhood.set(`inc:${i.id}`, m);
+      const camMatch = matchHotspotByName(`${cam.route} ${cam.description ?? ""}`);
+      if (camMatch) incidentNeighborhood.set(`inc:${i.id}`, camMatch);
     }
   }
 
@@ -641,16 +641,11 @@ export async function loadKgFromSupabase(): Promise<{
   const nbById = new Map(nodes.map((n) => [n.id, n.neighborhood ?? UNMAPPED]));
   for (const n of nodes) {
     if (n.neighborhood && n.neighborhood !== UNMAPPED) continue;
-    const linked = edges.find((e) => e.source === n.id || e.target === n.id);
-    if (linked) {
-      const other = linked.source === n.id ? linked.target : linked.source;
-      const nb = nbById.get(other);
-      if (nb && nb !== UNMAPPED) {
-        n.neighborhood = nb;
-        continue;
-      }
-    }
-    n.neighborhood = UNMAPPED;
+    const resolved = edges
+      .filter((e) => e.source === n.id || e.target === n.id)
+      .map((e) => nbById.get(e.source === n.id ? e.target : e.source))
+      .find((nb) => nb && nb !== UNMAPPED);
+    n.neighborhood = resolved ?? UNMAPPED;
   }
 
   return { nodes, edges };
