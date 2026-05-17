@@ -102,12 +102,18 @@ export function TopPriorityPanel({ onFocus, max = 5 }: Props) {
                   <span className="font-mono text-[10px] font-semibold">
                     {i.tier}
                   </span>
-                  <span className="truncate text-xs font-medium">
-                    {i.affinity}
+                  <span className="truncate text-xs font-medium capitalize">
+                    {i.affinity && i.affinity !== "unknown"
+                      ? i.affinity.replace(/-/g, " ")
+                      : i.neighborhood && i.neighborhood !== "unknown"
+                        ? i.neighborhood.replace(/-/g, " ")
+                        : "uncategorized signal"}
                   </span>
                 </span>
                 <span className="block truncate text-[11px] text-neutral-500">
-                  {i.neighborhood} · {i.sourceCount} src
+                  {i.affinity && i.affinity !== "unknown" && i.neighborhood && i.neighborhood !== "unknown"
+                    ? `${i.neighborhood.replace(/-/g, " ")} · ${i.sourceCount} src`
+                    : `${i.sourceCount} source${i.sourceCount === 1 ? "" : "s"} · p=${i.priority.toFixed(2)}`}
                 </span>
               </span>
             </button>
