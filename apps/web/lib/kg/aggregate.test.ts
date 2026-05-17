@@ -78,4 +78,19 @@ describe("buildDetail", () => {
     expect(spine.find((s) => s.id === "inc:other")).toBeUndefined();
     expect(stubs.every((s) => s.neighborhood === "Mission")).toBe(true);
   });
+  it("returns empty spine/stubs/edges for an unknown neighborhood", () => {
+    const r = buildDetail("Nowhere", nodes, edges);
+    expect(r.spine).toEqual([]);
+    expect(r.stubs).toEqual([]);
+    expect(r.edges).toEqual([]);
+  });
+  it("collapses acknowledged alerts into the alert stub", () => {
+    const withAcked: KgNode[] = [
+      ...nodes,
+      n("alert:acked", "alert", "Mission", { ack: "acknowledged" }),
+    ];
+    const { spine, stubs } = buildDetail("Mission", withAcked, edges);
+    expect(spine.find((s) => s.id === "alert:acked")).toBeUndefined();
+    expect(stubs.find((s) => s.kind === "alert")?.count).toBe(1);
+  });
 });

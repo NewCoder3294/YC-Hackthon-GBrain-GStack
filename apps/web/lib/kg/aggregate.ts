@@ -66,7 +66,10 @@ export function buildOverview(
 }
 
 export const DETAIL_INCIDENT_LIMIT = 8;
-const SPINE_KINDS: ReadonlySet<KgNodeKind> = new Set([
+/** Kinds always in the spine regardless of metadata. Alerts are handled
+ * separately (only unacknowledged alerts join the spine) — do NOT add
+ * "alert" here or the ack filtering below is bypassed. */
+const UNCONDITIONAL_SPINE_KINDS: ReadonlySet<KgNodeKind> = new Set([
   "gang",
   "decision",
 ]);
@@ -81,11 +84,15 @@ export function buildDetail(
   const spine: KgNode[] = [];
   const overflow = new Map<KgNodeKind, number>();
 
+  // Newest first. Date.getTime() avoids localeCompare mis-ordering
+  // single-digit day/month strings; missing/invalid dates (NaN) sort last.
   const incidents = local
     .filter((x) => x.kind === "incident")
-    .sort((a, b) =>
-      String(b.meta?.created_at ?? "").localeCompare(String(a.meta?.created_at ?? "")),
-    );
+    .sort((a, b) => {
+      const ta = new Date(String(a.meta?.created_at ?? "")).getTime();
+      const tb = new Date(String(b.meta?.created_at ?? "")).getTime();
+      return (Number.isNaN(tb) ? -Infinity : tb) - (Number.isNaN(ta) ? -Infinity : ta);
+    });
   incidents.slice(0, DETAIL_INCIDENT_LIMIT).forEach((i) => spine.push(i));
   if (incidents.length > DETAIL_INCIDENT_LIMIT) {
     overflow.set("incident", incidents.length - DETAIL_INCIDENT_LIMIT);
@@ -93,8 +100,10 @@ export function buildDetail(
 
   for (const x of local) {
     if (x.kind === "incident") continue;
+    // Unacknowledged alerts are high-signal and stay in the spine;
+    // acknowledged ones collapse into the alert stub.
     const isSpine =
-      SPINE_KINDS.has(x.kind) ||
+      UNCONDITIONAL_SPINE_KINDS.has(x.kind) ||
       (x.kind === "alert" && x.meta?.ack !== "acknowledged");
     if (isSpine) spine.push(x);
     else overflow.set(x.kind, (overflow.get(x.kind) ?? 0) + 1);
