@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   type LiveIncident,
@@ -60,6 +61,14 @@ function shape(r: DbRow): LiveIncident {
 // via the service client so RLS on `live_incidents` (which denies anon
 // reads) doesn't blank the operator feed.
 export async function GET() {
+  const auth = await createClient();
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = createServiceClient();
     const since = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
