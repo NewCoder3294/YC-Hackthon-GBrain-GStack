@@ -20,8 +20,8 @@ yolov8n.pt
 .env*.save
 .env.*.local
 
-# `vercel env pull` (run at repo root) creates files that don't start
-# with .env — catch the `*.env.local` shape too.
+# `vercel env pull caltrans-cctv.env.local` (run at repo root) creates files
+# that don't start with .env — catch the `*.env.local` shape too.
 *.env.local
 *.env
 *.env.*.local
@@ -32,7 +32,8 @@ yolov8n.pt
 !.env.example
 !*.env.example
 
-# Local audio binaries should not be committed
+# Dispatch audio lives in Supabase Storage (bucket: dispatch-audio).
+# README.md + manifest.example.json stay tracked; binaries do not.
 apps/web/public/dispatch-audio/*.m4a
 apps/web/public/dispatch-audio/*.mp3
 apps/web/public/dispatch-audio/*.wav
