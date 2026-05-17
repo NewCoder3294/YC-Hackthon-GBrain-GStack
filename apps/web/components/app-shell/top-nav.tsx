@@ -33,7 +33,7 @@ export function TopNav() {
           <NavLink href={"/incidents" as Route} label="Incidents" />
           <NavLink href={"/enrichment" as Route} label="Web Search" />
           <NavLink href={"/feed" as Route} label="Feed" />
-          <NavLink href={"/openclaw" as Route} label="OpenClaw" />
+          <NavLink href={"/openclaw" as Route} label="NemoClaw" />
         </nav>
       </div>
       <ThemeToggle />

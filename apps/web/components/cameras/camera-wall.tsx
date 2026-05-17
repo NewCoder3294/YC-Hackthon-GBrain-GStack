@@ -159,7 +159,7 @@ export function CameraWall({ cameras }: Props) {
           title="Hide cameras reporting no signal"
         >
           <span className={cn("h-1.5 w-1.5", hideOffline ? "bg-white" : "bg-neutral-300")} />
-          Offline
+          Online
         </button>
 
         <label className="ml-auto flex items-center gap-2">
