@@ -147,6 +147,30 @@ function Hero() {
   );
 }
 
+// IntersectionObserver hook. Returns [ref, inView]. `inView` flips true
+// the first time the element enters the viewport and stays true (so the
+// reveal animation plays exactly once when the user scrolls past).
+function useInView<T extends Element>(
+  options: IntersectionObserverInit = { threshold: 0.25 },
+): [React.RefObject<T | null>, boolean] {
+  const ref = useRef<T | null>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) {
+        setInView(true);
+        io.disconnect();
+      }
+    }, options);
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return [ref, inView];
+}
+
 function HookStat() {
   return (
     <section className="border-b border-neutral-200 bg-black text-white">
@@ -169,12 +193,15 @@ function HookStat() {
         <p className="mt-6 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           Source · Bureau of Justice Statistics
         </p>
-        <p className="mx-auto mt-8 max-w-2xl font-mono text-xs leading-relaxed text-neutral-300 md:text-sm">
-          WatchDog surfaces the signals that are already out there — live
-          SFPD scanner radio, live CalTrans street cameras, live SFGov
-          dispatch records — so the reported share doesn&apos;t decide what
-          gets seen. <span className="text-white">Everything below is real
-          data, pulled live.</span>
+        <p className="mx-auto mt-8 max-w-2xl font-mono text-xs leading-relaxed text-neutral-300 md:text-base">
+          A crime that never gets called in still leaves a trace.{" "}
+          <span className="text-white">A streetlight catches it.
+          A scanner picks up the response. A 911 hangup half-completes.</span>{" "}
+          WatchDog reads those traces the moment they happen, fuses them
+          across silos, and hands the dispatcher one ranked queue.
+          <span className="block mt-3 text-white">
+            Every byte on this page is real, pulled live.
+          </span>
         </p>
       </div>
     </section>
@@ -571,10 +598,19 @@ function HowStep({
   diagram: React.ReactNode;
   mirror?: boolean;
 }) {
+  const [sectionRef, inView] = useInView<HTMLDivElement>({ threshold: 0.18 });
   return (
     <section className="border-b border-neutral-200">
-      <div className="mx-auto max-w-6xl px-6 py-20 lg:py-24">
-        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[4fr_8fr] lg:gap-16">
+      <div
+        ref={sectionRef}
+        className="mx-auto max-w-6xl px-6 py-20 lg:py-24"
+        style={{
+          opacity: inView ? 1 : 0,
+          transform: inView ? "translateY(0)" : "translateY(24px)",
+          transition: "opacity 700ms ease-out, transform 700ms ease-out",
+        }}
+      >
+        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[2fr_5fr] lg:gap-16">
           <div className={mirror ? "lg:order-2" : ""}>
             <div className="flex items-baseline gap-4">
               <span className="font-mono text-5xl leading-none tracking-tight text-neutral-200 tabular-nums">
@@ -605,7 +641,7 @@ function HowStep({
             </ul>
           </div>
           <div className={mirror ? "lg:order-1" : ""}>
-            <div className="wd-diagram-shell border border-neutral-200 bg-white p-5 md:p-8">
+            <div className="wd-diagram-shell border border-neutral-200 bg-white p-3 md:p-4">
               {diagram}
             </div>
           </div>
@@ -686,8 +722,15 @@ function FusionDiagram() {
   ];
   const rowH = 56;
   const baseY = 60;
+  const [svgRef, inView] = useInView<SVGSVGElement>({ threshold: 0.35 });
   return (
-    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Fusion diagram">
+    <svg
+      ref={svgRef}
+      viewBox="0 0 480 280"
+      className="w-full"
+      role="img"
+      aria-label="Fusion diagram"
+    >
       <ArrowDef id="arr-fusion" />
       <ZoneFrame x={4} y={4} w={180} h={272} step="01" label="signals" />
       <ZoneFrame x={196} y={4} w={132} h={272} step="02" label="correlator" />
@@ -695,8 +738,18 @@ function FusionDiagram() {
 
       {sources.map((s, i) => {
         const y = baseY + i * rowH;
+        const initial = { opacity: 0, transform: "translateX(-8px)" };
+        const live = {
+          opacity: 1,
+          transform: "translateX(0)",
+          transition: `opacity 520ms ease-out ${i * 220}ms, transform 520ms ease-out ${i * 220}ms`,
+        };
         return (
-          <g key={s.glyph} className="wd-fusion-source" style={{ cursor: "pointer" }}>
+          <g
+            key={s.glyph}
+            className="wd-fusion-source"
+            style={{ cursor: "pointer", ...(inView ? live : initial) }}
+          >
             <rect
               className="wd-fusion-source-bg"
               x={12}
@@ -743,7 +796,6 @@ function FusionDiagram() {
               stroke={DIAGRAM_STROKE}
               strokeWidth="1"
               markerEnd="url(#arr-fusion)"
-              style={{ animation: `wd-fade-up 600ms ease-out ${i * 140}ms both` }}
             />
           </g>
         );
@@ -797,74 +849,108 @@ function MemoryDiagram() {
     { ts: "−7 d", note: "11 PM cluster · 16th & Valencia" },
     { ts: "−12 d", note: "false pose: 0.71 · streetlight 14B" },
     { ts: "−21 d", note: "confirmed assault · charged" },
+    { ts: "−34 d", note: "311 noise complaint · same corner" },
   ];
+  // Re-trigger the chip reveal when the diagram scrolls into view so the
+  // animation lands when the operator is actually looking at it.
+  const [svgRef, inView] = useInView<SVGSVGElement>({ threshold: 0.35 });
   return (
-    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Memory diagram">
+    <svg
+      ref={svgRef}
+      viewBox="0 0 520 340"
+      className="w-full"
+      role="img"
+      aria-label="Memory diagram"
+    >
       <ArrowDef id="arr-memory" />
-      <ZoneFrame x={4} y={4} w={144} h={272} step="01" label="review" />
-      <ZoneFrame x={160} y={4} w={172} h={272} step="02" label="gbrain" />
-      <ZoneFrame x={344} y={4} w={132} h={272} step="03" label="recall" />
+      <ZoneFrame x={4} y={4} w={156} h={332} step="01" label="review" />
+      <ZoneFrame x={172} y={4} w={192} h={332} step="02" label="gbrain" />
+      <ZoneFrame x={376} y={4} w={140} h={332} step="03" label="recall" />
 
-      <rect x={20} y={64} width={114} height={86} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={28} y={80} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+      {/* Review zone — bigger incident card. */}
+      <rect x={20} y={56} width={124} height={240} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={28} y={72} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
         INCIDENT · #1241
       </text>
-      <text x={28} y={100} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+      <text x={28} y={96} fontFamily={PX_MONO} fontSize="12" fill={DIAGRAM_STROKE}>
         dispatcher
       </text>
-      <text x={28} y={114} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+      <text x={28} y={114} fontFamily={PX_MONO} fontSize="12" fill={DIAGRAM_STROKE}>
         held
       </text>
-      <text x={28} y={134} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        reason: bar crowd
+      <line x1={28} y1={128} x2={136} y2={128} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
+      <text x={28} y={146} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        reason
       </text>
-      <text x={28} y={146} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+      <text x={28} y={160} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        bar crowd
+      </text>
+      <text x={28} y={184} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        outcome
+      </text>
+      <text x={28} y={198} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
         no patrol sent
       </text>
+      <text x={28} y={222} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        reviewer
+      </text>
+      <text x={28} y={236} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        Off. Reyes
+      </text>
+      <text x={28} y={272} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        22:50 · 2026-05-15
+      </text>
 
-      <path
-        d="M134,108 L162,108"
-        stroke={DIAGRAM_STROKE}
-        markerEnd="url(#arr-memory)"
-      />
-      <text x={148} y={102} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+      <path d="M146,160 L174,160" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
+      <text x={160} y={154} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
         write
       </text>
 
-      <rect x={176} y={36} width={144} height={208} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={184} y={52} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+      {/* GBrain zone — taller box, 5 chips. */}
+      <rect x={184} y={36} width={168} height={288} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={192} y={54} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED} letterSpacing="1.2">
         GBRAIN · mission/16th
       </text>
-      <line x1={176} y1={58} x2={320} y2={58} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
+      <line x1={184} y1={62} x2={352} y2={62} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
       {chips.map((c, i) => {
-        const y = 70 + i * 38;
+        const y = 76 + i * 46;
         const isNew = i === 0;
+        const initialState = { opacity: 0, transform: "translateY(6px)" };
+        const liveState = {
+          opacity: 1,
+          transform: "translateY(0)",
+          transition: `opacity 480ms ease-out ${i * 180}ms, transform 480ms ease-out ${i * 180}ms`,
+        };
         return (
-          <g key={c.ts} className="wd-memory-chip" style={{ cursor: "pointer" }}>
+          <g
+            key={c.ts}
+            className="wd-memory-chip"
+            style={{ cursor: "pointer", ...(inView ? liveState : initialState) }}
+          >
             <rect
               className="wd-memory-chip-bg"
-              x={184}
+              x={192}
               y={y}
-              width={128}
-              height={28}
+              width={152}
+              height={36}
               fill={isNew ? DIAGRAM_STROKE : "white"}
               stroke={DIAGRAM_STROKE}
             />
             <text
-              x={190}
-              y={y + 11}
+              x={200}
+              y={y + 13}
               fontFamily={PX_MONO}
-              fontSize="7"
+              fontSize="8"
               fill={isNew ? "#a3a3a3" : DIAGRAM_MUTED}
               letterSpacing="1.2"
             >
               {c.ts}
             </text>
             <text
-              x={190}
-              y={y + 22}
+              x={200}
+              y={y + 27}
               fontFamily={PX_MONO}
-              fontSize="8"
+              fontSize="9"
               fill={isNew ? "white" : DIAGRAM_STROKE}
             >
               {c.note}
@@ -873,31 +959,41 @@ function MemoryDiagram() {
         );
       })}
 
-      <path
-        d="M320,140 L362,140"
-        stroke={DIAGRAM_STROKE}
-        markerEnd="url(#arr-memory)"
-      />
-      <text x={341} y={134} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+      <path d="M352,170 L378,170" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
+      <text x={365} y={164} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
         recall
       </text>
 
-      <rect x={362} y={84} width={108} height={106} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={370} y={100} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+      {/* Recall zone — bigger next-signal card. */}
+      <rect x={394} y={64} width={114} height={224} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={402} y={82} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
         NEXT SIGNAL
       </text>
-      <text x={370} y={120} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+      <text x={402} y={108} fontFamily={PX_MONO} fontSize="13" fill={DIAGRAM_STROKE}>
         CAM 14B
       </text>
-      <text x={370} y={134} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+      <text x={402} y={124} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
         Mission &amp; 16th
       </text>
-      <rect x={370} y={146} width={92} height={14} fill={DIAGRAM_STROKE} />
-      <text x={376} y={156} fontFamily={PX_MONO} fontSize="7" fill="white">
-        + 4 prior matches
+      <line x1={402} y1={140} x2={500} y2={140} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
+      <rect x={402} y={154} width={100} height={20} fill={DIAGRAM_STROKE} />
+      <text x={410} y={167} fontFamily={PX_MONO} fontSize="9" fill="white">
+        + 5 prior matches
       </text>
-      <text x={370} y={176} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
-        score ↓ false-positive
+      <text x={402} y={194} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        score
+      </text>
+      <text x={402} y={210} fontFamily={PX_MONO} fontSize="11" fill={DIAGRAM_STROKE}>
+        ↓ false-positive
+      </text>
+      <text x={402} y={234} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        pattern
+      </text>
+      <text x={402} y={250} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        bar closing
+      </text>
+      <text x={402} y={274} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        → soft-rank
       </text>
     </svg>
   );
@@ -909,35 +1005,58 @@ type DecisionState = "pending" | "approved" | "reassigned" | "rejected";
 function DecisionDiagram() {
   const [predicted, setPredicted] = useState<DecisionState>("pending");
   const [live, setLive] = useState<DecisionState>("pending");
+  const [wrapRef, inView] = useInView<HTMLDivElement>({ threshold: 0.3 });
+  const cardStyle = (i: number) =>
+    inView
+      ? {
+          opacity: 1,
+          transform: "translateY(0)",
+          transition: `opacity 520ms ease-out ${i * 220}ms, transform 520ms ease-out ${i * 220}ms`,
+        }
+      : { opacity: 0, transform: "translateY(12px)" };
   return (
-    <div className="flex flex-col gap-3" role="group" aria-label="Decision diagram">
-      <DecisionCard
-        kind="predicted"
-        priority="A"
-        title="245 ADW · Mission corridor"
-        sub="GBrain: A + B in same neighborhood, 4 calls in 7m · conf 0.78"
-        officer="Off. Reyes 4B21 · Co. B"
-        countdown={22}
-        state={predicted}
-        onApprove={() => setPredicted("approved")}
-        onReassign={() => setPredicted("reassigned")}
-        onReject={() => setPredicted("rejected")}
-        onReset={() => setPredicted("pending")}
-      />
-      <DecisionCard
-        kind="live"
-        priority="B"
-        title="594 Vandalism · Eddy & Leavenworth"
-        sub="SFPD Co. D (Tenderloin) · TG 816 · call #261342053"
-        officer="Off. Patel 4D05 · Co. D"
-        countdown={9}
-        state={live}
-        onApprove={() => setLive("approved")}
-        onReassign={() => setLive("reassigned")}
-        onReject={() => setLive("rejected")}
-        onReset={() => setLive("pending")}
-      />
-      <p className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+    <div
+      ref={wrapRef}
+      className="flex flex-col gap-3"
+      role="group"
+      aria-label="Decision diagram"
+    >
+      <div style={cardStyle(0)}>
+        <DecisionCard
+          kind="predicted"
+          priority="A"
+          title="245 ADW · Mission corridor"
+          sub="GBrain: A + B in same neighborhood, 4 calls in 7m · conf 0.78"
+          officer="Off. Reyes 4B21 · Co. B"
+          countdown={22}
+          state={predicted}
+          countdownAnimated={inView}
+          onApprove={() => setPredicted("approved")}
+          onReassign={() => setPredicted("reassigned")}
+          onReject={() => setPredicted("rejected")}
+          onReset={() => setPredicted("pending")}
+        />
+      </div>
+      <div style={cardStyle(1)}>
+        <DecisionCard
+          kind="live"
+          priority="B"
+          title="594 Vandalism · Eddy & Leavenworth"
+          sub="SFPD Co. D (Tenderloin) · TG 816 · call #261342053"
+          officer="Off. Patel 4D05 · Co. D"
+          countdown={9}
+          state={live}
+          countdownAnimated={inView}
+          onApprove={() => setLive("approved")}
+          onReassign={() => setLive("reassigned")}
+          onReject={() => setLive("rejected")}
+          onReset={() => setLive("pending")}
+        />
+      </div>
+      <p
+        className="font-mono text-[9px] uppercase tracking-widest text-neutral-400"
+        style={cardStyle(2)}
+      >
         Click any button to preview · click the status badge to reset
       </p>
     </div>
@@ -952,6 +1071,7 @@ function DecisionCard({
   officer,
   countdown,
   state,
+  countdownAnimated,
   onApprove,
   onReassign,
   onReject,
@@ -964,6 +1084,7 @@ function DecisionCard({
   officer: string;
   countdown: number;
   state: DecisionState;
+  countdownAnimated?: boolean;
   onApprove: () => void;
   onReassign: () => void;
   onReject: () => void;
@@ -1043,7 +1164,12 @@ function DecisionCard({
           <div className="mt-1.5 h-[2px] w-full bg-neutral-100">
             <div
               className="h-full bg-black"
-              style={{ width: `${pctLeft * 100}%`, transition: "width 320ms ease" }}
+              style={{
+                width: countdownAnimated ? `${pctLeft * 100}%` : "0%",
+                transition: countdownAnimated
+                  ? "width 900ms ease-out 400ms"
+                  : "none",
+              }}
             />
           </div>
         )}
