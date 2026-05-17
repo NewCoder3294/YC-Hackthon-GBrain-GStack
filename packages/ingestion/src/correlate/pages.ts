@@ -51,6 +51,28 @@ function buildTimeline(i: ScoredIncident): string {
     .join("\n");
 }
 
+// Plain-language priority phrasing so the GBrain full-text search
+// (ASK GBRAIN) ranks these for natural dispatch questions like
+// "highest priority", "what's urgent", "dispatch now".
+const TIER_WORD: Record<string, string> = {
+  P1: "highest priority — dispatch immediately",
+  P2: "high priority — dispatch urgently",
+  P3: "routine priority — dispatch when available",
+  P4: "low priority — defer",
+};
+
+function dispatchSentence(i: ScoredIncident): string {
+  const span = i.cluster.signals;
+  const group = span[0]?.affinityGroup ?? "unknown";
+  const sources = [...new Set(span.map((s) => s.source))].sort().join(", ");
+  return (
+    `Priority ${i.tier}: ${TIER_WORD[i.tier] ?? "unranked"}. ` +
+    `A ${group} incident in ${i.cluster.neighborhood} with ` +
+    `${span.length} corroborating signal(s) from ${sources}. ` +
+    `${i.rationale || ""}`.trim()
+  );
+}
+
 function buildBody(i: ScoredIncident): string {
   const f = i.factors;
   const span = i.cluster.signals;
@@ -61,6 +83,8 @@ function buildBody(i: ScoredIncident): string {
   const lastAt = last?.occurredAt ?? firstAt;
   const sources = [...new Set(span.map((s) => s.source))].sort().join(", ");
   return [
+    dispatchSentence(i),
+    "",
     `**${i.tier}** correlated incident in **${i.cluster.neighborhood}** ` +
       `(${group}).`,
     "",

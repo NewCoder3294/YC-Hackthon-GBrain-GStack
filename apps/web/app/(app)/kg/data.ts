@@ -400,7 +400,11 @@ export async function loadKgFromSupabase(): Promise<{
   }
 
   for (const r of gbrainRecords) {
-    if (r.kind === "pattern" || r.kind === "baseline") {
+    if (
+      r.kind === "pattern" ||
+      r.kind === "baseline" ||
+      r.kind === "incident"
+    ) {
       const meta: Record<string, string | number> = { source: r.source };
       if (r.confidence != null) meta.confidence = Number(r.confidence).toFixed(2);
       if (r.samples != null) meta.samples = r.samples;

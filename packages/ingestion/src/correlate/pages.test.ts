@@ -88,4 +88,14 @@ describe("buildIncidentPages", () => {
     expect(p.compiledTruth).toContain("**Priority** | **0.81**");
     expect(p.compiledTruth).toContain(incident.rationale);
   });
+
+  it("opens with an FTS-friendly plain-language priority sentence", () => {
+    // ASK GBRAIN runs Postgres FTS over compiled_truth — these words
+    // make "highest priority" / "dispatch" queries rank P1s.
+    expect(p.compiledTruth).toMatch(
+      /^Priority P1: highest priority — dispatch immediately\./,
+    );
+    expect(p.compiledTruth).toContain("Bayview Hunters Point");
+    expect(p.compiledTruth).toContain("corroborating signal");
+  });
 });
