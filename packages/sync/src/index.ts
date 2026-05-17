@@ -4,6 +4,7 @@ export * from "./sf-bounds";
 export * from "./sf-neighborhoods";
 export * from "./live-incidents";
 export * from "./orchestrate";
+export * from "./probe";
 export * from "./sources/sfpd-cad";
 export * from "./sources/fire-ems";
 export * from "./sources/sf311";

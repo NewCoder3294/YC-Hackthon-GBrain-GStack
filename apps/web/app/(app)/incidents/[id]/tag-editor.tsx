@@ -57,8 +57,8 @@ export function TagEditor({ incidentId, clipId, initialTags }: Props) {
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1">
         {tags.length === 0 && (
-          <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-300">
-            No tags
+          <span className="font-mono text-[10px] leading-relaxed text-neutral-400">
+            None yet — add tags like <code className="bg-neutral-100 px-1">plate-loiter</code> or <code className="bg-neutral-100 px-1">gang-related</code> to make this searchable.
           </span>
         )}
         {tags.map((t) => (
