@@ -988,8 +988,8 @@ function MemoryDiagram() {
         );
       })}
 
-      <path d="M352,170 L378,170" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
-      <text x={365} y={156} textAnchor="middle" fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="0.6">
+      <path d="M360,170 L390,170" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
+      <text x={360} y={156} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="0.6">
         recall
       </text>
 
@@ -1012,8 +1012,8 @@ function MemoryDiagram() {
       <text x={402} y={194} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
         score
       </text>
-      <text x={402} y={210} fontFamily={PX_MONO} fontSize="11" fill={DIAGRAM_STROKE}>
-        ↓ false-positive
+      <text x={402} y={210} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        ↓ false-pos
       </text>
       <text x={402} y={234} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
         pattern
