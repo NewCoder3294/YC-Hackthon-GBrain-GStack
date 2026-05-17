@@ -144,12 +144,12 @@ export function CameraTile({ camera, onStatusChange }: Props) {
 
   const dot =
     status === "live"
-      ? "bg-black"
+      ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]"
       : status === "loading"
-        ? "bg-neutral-400"
+        ? "bg-amber-400"
         : status === "offline"
-          ? "bg-neutral-300"
-          : "bg-neutral-200";
+          ? "bg-rose-500"
+          : "bg-neutral-300";
 
   return (
     <div

@@ -86,7 +86,7 @@ export default async function IncidentsPage({ searchParams }: PageProps) {
       <header className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
         <div className="flex items-baseline gap-3">
           <h1 className="font-mono text-sm uppercase tracking-widest">
-            Incidents
+            <span className="border-b-2 border-amber-400 pb-0.5">Inc</span>idents
           </h1>
           <span className="font-mono text-xs text-neutral-500">
             {rows.length} {rows.length === 1 ? "result" : "results"}
