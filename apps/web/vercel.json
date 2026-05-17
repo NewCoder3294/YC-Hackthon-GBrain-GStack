@@ -19,6 +19,10 @@
     {
       "path": "/api/cron/openclaw-tick",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/notify-contributors",
+      "schedule": "0 * * * *"
     }
   ]
 }
