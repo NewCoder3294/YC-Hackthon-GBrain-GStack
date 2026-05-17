@@ -68,7 +68,7 @@ export interface NeighborhoodContext {
 
 export function resolveNeighborhood(
   node: KgNode,
-  c: NeighborhoodContext,
+  ctx: NeighborhoodContext,
 ): string {
   const meta = node.meta ?? {};
   const lat = typeof meta.lat === "number" ? meta.lat : null;
@@ -76,15 +76,16 @@ export function resolveNeighborhood(
   if (lat != null && lng != null) return nearestHotspot(lat, lng);
 
   if (node.kind === "gang") {
-    return c.gangNeighborhood.get(node.id) ?? UNMAPPED;
+    return ctx.gangNeighborhood.get(node.id) ?? UNMAPPED;
   }
   if (node.kind === "member") {
-    const gang = c.memberToGang.get(node.id);
-    return (gang && c.gangNeighborhood.get(gang)) ?? UNMAPPED;
+    const gang = ctx.memberToGang.get(node.id);
+    return (gang && ctx.gangNeighborhood.get(gang)) ?? UNMAPPED;
   }
   if (node.kind === "incident") {
-    return c.incidentNeighborhood.get(node.id) ?? UNMAPPED;
+    return ctx.incidentNeighborhood.get(node.id) ?? UNMAPPED;
   }
+  // direct override: some node kinds embed their neighborhood in meta
   if (typeof meta.neighborhood === "string" && meta.neighborhood) {
     return meta.neighborhood;
   }

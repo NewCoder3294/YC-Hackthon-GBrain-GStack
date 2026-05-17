@@ -3,7 +3,11 @@ import {
   nearestHotspot,
   matchHotspotByName,
   projectToViewport,
+  resolveNeighborhood,
+  UNMAPPED,
+  type NeighborhoodContext,
 } from "./neighborhoods";
+import type { KgNode } from "@/components/kg/types";
 
 describe("nearestHotspot", () => {
   it("snaps exact Tenderloin centroid to Tenderloin", () => {
@@ -53,9 +57,6 @@ describe("projectToViewport", () => {
   });
 });
 
-import { resolveNeighborhood, type NeighborhoodContext } from "./neighborhoods";
-import type { KgNode } from "@/components/kg/types";
-
 function ctx(over: Partial<NeighborhoodContext> = {}): NeighborhoodContext {
   return {
     gangNeighborhood: new Map(),
@@ -83,6 +84,11 @@ describe("resolveNeighborhood", () => {
     expect(resolveNeighborhood(node("inc:5", "incident"), c)).toBe("Tenderloin");
   });
   it("falls back to Unmapped", () => {
-    expect(resolveNeighborhood(node("member:x", "member"), ctx())).toBe("Unmapped");
+    expect(resolveNeighborhood(node("member:x", "member"), ctx())).toBe(UNMAPPED);
+  });
+  it("gang resolves directly via gangNeighborhood, else Unmapped", () => {
+    const c = ctx({ gangNeighborhood: new Map([["gang:1", "Bayview Hunters Point"]]) });
+    expect(resolveNeighborhood(node("gang:1", "gang"), c)).toBe("Bayview Hunters Point");
+    expect(resolveNeighborhood(node("gang:404", "gang"), ctx())).toBe(UNMAPPED);
   });
 });
