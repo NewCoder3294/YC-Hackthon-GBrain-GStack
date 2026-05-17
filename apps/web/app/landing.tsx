@@ -4,9 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
+import { BusinessOwnerView } from "@/components/landing/business-owner-view";
 
 type SourceType = "pd" | "fire" | "civic";
 type Severity = "low" | "med" | "high";
+
+export type LandingMode = "dispatcher" | "owner";
 
 interface Signal {
   id: number;
@@ -38,21 +41,58 @@ function fmtTime(d: Date) {
 }
 
 export function Landing() {
+  const [mode, setMode] = useState<LandingMode>("dispatcher");
   return (
     <main className="relative min-h-screen overflow-x-hidden bg-white text-black">
-      <Header />
+      <Header mode={mode} setMode={setMode} />
+      <ModeSwap mode={mode}>
+        {mode === "dispatcher" ? <DispatcherView /> : <BusinessOwnerView />}
+      </ModeSwap>
+      <Footer />
+    </main>
+  );
+}
+
+function DispatcherView() {
+  return (
+    <>
       <Hero />
       <HookStat />
       <HowItWorks />
       <Pillars />
       <NotSection />
       <ClosingCta />
-      <Footer />
-    </main>
+    </>
   );
 }
 
-function Header() {
+// Brief crossfade between modes so the swap doesn't feel like a hard
+// route change. Keyed by mode so the children remount and replay any
+// scroll-into-view animations from the top.
+function ModeSwap({
+  mode,
+  children,
+}: {
+  mode: LandingMode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      key={mode}
+      style={{ animation: "wd-fade-up 320ms ease-out both" }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Header({
+  mode,
+  setMode,
+}: {
+  mode: LandingMode;
+  setMode: (m: LandingMode) => void;
+}) {
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-neutral-200 bg-white/90 px-6 py-3 backdrop-blur">
       <div className="flex items-center gap-2">
@@ -69,13 +109,81 @@ function Header() {
         </span>
       </div>
       <Clock />
-      <Link
-        href={"/wall" as Route}
-        className="border border-black bg-black px-3 py-1.5 font-mono text-[11px] uppercase tracking-widest text-white transition-colors hover:bg-neutral-700"
-      >
-        Open dispatcher →
-      </Link>
+      <ModeToggle mode={mode} setMode={setMode} />
     </header>
+  );
+}
+
+// Sliding two-way toggle. The active indicator is a black pill that
+// translates between the two options. Buttons share a 2-col grid so
+// each button is exactly half-width — otherwise the 50% indicator pill
+// bleeds into the wider button and visually clips the label.
+function ModeToggle({
+  mode,
+  setMode,
+}: {
+  mode: LandingMode;
+  setMode: (m: LandingMode) => void;
+}) {
+  const isOwner = mode === "owner";
+  return (
+    <div className="flex items-center gap-2">
+      <span className="hidden font-mono text-[10px] uppercase tracking-widest text-neutral-400 lg:inline">
+        View as
+      </span>
+      <div
+        role="tablist"
+        aria-label="Landing audience"
+        className="relative inline-grid grid-cols-2 border border-black bg-white p-0.5 font-mono text-[10px] uppercase tracking-widest"
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] bg-black"
+          style={{
+            transform: isOwner ? "translateX(100%)" : "translateX(0)",
+            transition: "transform 280ms cubic-bezier(0.4, 0, 0.2, 1)",
+          }}
+        />
+        <button
+          type="button"
+          role="tab"
+          aria-selected={!isOwner}
+          onClick={() => setMode("dispatcher")}
+          className={`relative z-10 flex items-center justify-center gap-1.5 px-4 py-1.5 transition-colors ${
+            isOwner
+              ? "text-neutral-500 hover:text-black"
+              : "text-white"
+          }`}
+        >
+          <span
+            aria-hidden
+            className={`inline-block h-1.5 w-1.5 rounded-full transition-colors ${
+              isOwner ? "bg-neutral-300" : "bg-white"
+            }`}
+          />
+          Dispatcher
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={isOwner}
+          onClick={() => setMode("owner")}
+          className={`relative z-10 flex items-center justify-center gap-1.5 px-4 py-1.5 transition-colors ${
+            isOwner
+              ? "text-white"
+              : "text-neutral-500 hover:text-black"
+          }`}
+        >
+          <span
+            aria-hidden
+            className={`inline-block h-1.5 w-1.5 rounded-full transition-colors ${
+              isOwner ? "bg-white" : "bg-neutral-300"
+            }`}
+          />
+          For businesses
+        </button>
+      </div>
+    </div>
   );
 }
 

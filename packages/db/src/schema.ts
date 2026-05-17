@@ -291,3 +291,25 @@ export const contributorNotifications = pgTable(
 export type Contributor = typeof contributors.$inferSelect;
 export type NewContributor = typeof contributors.$inferInsert;
 export type ContributorNotification = typeof contributorNotifications.$inferSelect;
+
+// Public landing-page waitlist for business / shop owners who want to
+// contribute their CCTV. Distinct from `contributors`: this captures
+// intent (email-first), the contributors table represents enrollment.
+export const contributorWaitlist = pgTable("contributor_waitlist", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull(),
+  businessName: text("business_name"),
+  address: text("address"),
+  contactName: text("contact_name"),
+  cameraType: text("camera_type"),
+  message: text("message"),
+  status: text("status").notNull().default("pending"),
+  sourceIp: text("source_ip"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export type ContributorWaitlistRow = typeof contributorWaitlist.$inferSelect;
+export type NewContributorWaitlistRow = typeof contributorWaitlist.$inferInsert;
