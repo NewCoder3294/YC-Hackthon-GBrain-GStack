@@ -18,7 +18,7 @@ const GRID_OPTIONS = [
 
 type StreamFilter = "all" | "hls" | "mjpeg";
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE = 60;
 
 export function CameraWall({ cameras }: Props) {
   const [grid, setGrid] = useState<(typeof GRID_OPTIONS)[number]>(GRID_OPTIONS[1]);
@@ -26,7 +26,7 @@ export function CameraWall({ cameras }: Props) {
   const [stream, setStream] = useState<StreamFilter>("hls");
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [hideOffline, setHideOffline] = useState(true);
+  const [hideOffline, setHideOffline] = useState(false);
   const [offlineIds, setOfflineIds] = useState<Set<string>>(() => new Set());
 
   const reportStatus = useCallback((id: string, status: CameraStatus) => {

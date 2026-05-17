@@ -24,61 +24,11 @@ interface Props {
 
 const MJPEG_REFRESH_MS = 5000;
 const HLS_LOAD_TIMEOUT_MS = 8000;
-const BLANK_CHECK_DELAYS_MS = [2500, 5000, 8000, 12000];
-
-// Returns true if the sampled frame is near-uniform (all black / all grey /
-// solid colour). null = couldn't sample (tainted canvas or not ready).
-function isFrameBlank(
-  source: HTMLVideoElement | HTMLImageElement,
-): boolean | null {
-  const w =
-    source instanceof HTMLVideoElement ? source.videoWidth : source.naturalWidth;
-  const h =
-    source instanceof HTMLVideoElement ? source.videoHeight : source.naturalHeight;
-  if (w < 8 || h < 8) return null;
-  const sampleW = 32;
-  const sampleH = Math.max(8, Math.round((h / w) * sampleW));
-  const canvas = document.createElement("canvas");
-  canvas.width = sampleW;
-  canvas.height = sampleH;
-  const ctx = canvas.getContext("2d", { willReadFrequently: false });
-  if (!ctx) return null;
-  try {
-    ctx.drawImage(source, 0, 0, sampleW, sampleH);
-    const data = ctx.getImageData(0, 0, sampleW, sampleH).data;
-    let sum = 0;
-    let sumSq = 0;
-    let count = 0;
-    let min = 255;
-    let max = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i] ?? 0;
-      const g = data[i + 1] ?? 0;
-      const b = data[i + 2] ?? 0;
-      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-      sum += lum;
-      sumSq += lum * lum;
-      if (lum < min) min = lum;
-      if (lum > max) max = lum;
-      count++;
-    }
-    const mean = sum / count;
-    const variance = sumSq / count - mean * mean;
-    const stddev = Math.sqrt(Math.max(0, variance));
-    const range = max - min;
-    // Dark + mostly flat → blacked-out feed (allows light encoder noise
-    // and small "NO SIGNAL" text overlay).
-    if (mean < 35 && stddev < 14) return true;
-    // Tight luminance range across the whole frame → uniform grey/blue/etc.
-    if (range < 30) return true;
-    // Low-detail frame across any brightness → solid card with faint banding.
-    if (stddev < 7) return true;
-    return false;
-  } catch {
-    // getImageData throws on tainted canvas — caller treats as unknown.
-    return null;
-  }
-}
+// Structural-failure window: if the decoder never produced a real frame
+// (no width/height, never reached readyState>=2) by this deadline after
+// going "live", treat as offline. Pure pixel sampling is too noisy
+// (foggy / night / blank pavement looks blank but is a real feed).
+const STRUCTURAL_CHECK_MS = 10_000;
 
 export function CameraTile({ camera, onStatusChange }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -125,44 +75,16 @@ export function CameraTile({ camera, onStatusChange }: Props) {
       if (!cancelled) setStatus("offline");
     }, HLS_LOAD_TIMEOUT_MS);
 
-    const blankTimers: ReturnType<typeof setTimeout>[] = [];
+    let structuralTimer: ReturnType<typeof setTimeout> | null = null;
     let liveOnce = false;
-    let liveAt = 0;
-    let initialCurrentTime = 0;
-    let blankStreak = 0;
-    const scheduleBlankChecks = () => {
-      for (const delay of BLANK_CHECK_DELAYS_MS) {
-        blankTimers.push(
-          setTimeout(() => {
-            if (cancelled || !videoRef.current) return;
-            const v = videoRef.current;
-            // Structural: stream marked live but the decoder never produced a
-            // frame (no dimensions, no current data, or playback clock never
-            // moved since markLive). Treat as offline.
-            const noDims = v.videoWidth === 0 || v.videoHeight === 0;
-            const noReady = v.readyState < 2;
-            const noProgress =
-              Date.now() - liveAt > 4000 && v.currentTime <= initialCurrentTime;
-            if (noDims || noReady || noProgress) {
-              setStatus("offline");
-              return;
-            }
-            // Pixel sample: if canvas reads work and the frame is blank, count
-            // consecutive blank samples. Two in a row → offline (avoids
-            // false-positives on a single black frame between segments).
-            const verdict = isFrameBlank(v);
-            if (verdict === true) {
-              blankStreak += 1;
-              if (blankStreak >= 2) {
-                setStatus("offline");
-                return;
-              }
-            } else if (verdict === false) {
-              blankStreak = 0;
-            }
-          }, delay),
-        );
-      }
+    const scheduleStructuralCheck = () => {
+      structuralTimer = setTimeout(() => {
+        if (cancelled || !videoRef.current) return;
+        const v = videoRef.current;
+        const noDims = v.videoWidth === 0 || v.videoHeight === 0;
+        const noReady = v.readyState < 2;
+        if (noDims || noReady) setStatus("offline");
+      }, STRUCTURAL_CHECK_MS);
     };
 
     const markLive = () => {
@@ -171,9 +93,7 @@ export function CameraTile({ camera, onStatusChange }: Props) {
       setStatus("live");
       if (!liveOnce) {
         liveOnce = true;
-        liveAt = Date.now();
-        initialCurrentTime = videoRef.current?.currentTime ?? 0;
-        scheduleBlankChecks();
+        scheduleStructuralCheck();
       }
     };
     const markOffline = () => {
@@ -217,7 +137,7 @@ export function CameraTile({ camera, onStatusChange }: Props) {
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
-      for (const t of blankTimers) clearTimeout(t);
+      if (structuralTimer) clearTimeout(structuralTimer);
       hls?.destroy();
     };
   }, [inView, camera.streamUrl, camera.streamType]);
@@ -235,15 +155,9 @@ export function CameraTile({ camera, onStatusChange }: Props) {
 
   function handleImgLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const img = e.currentTarget;
-    // CalTrans "Temporarily Unavailable" placeholder is exactly 320×240
-    // Real feeds are 352×240 / 720×480 / 1280×720. Reject the placeholder size.
+    // CalTrans "Temporarily Unavailable" placeholder is exactly 320×240.
+    // Real feeds are 352×240 / 720×480 / 1280×720.
     if (img.naturalWidth === 320 && img.naturalHeight === 240) {
-      setStatus("offline");
-      return;
-    }
-    // Best-effort blank-frame check; canvas may be tainted for cross-origin
-    // MJPEG, in which case isFrameBlank returns null and we trust the load.
-    if (isFrameBlank(img) === true) {
       setStatus("offline");
       return;
     }
@@ -270,7 +184,6 @@ export function CameraTile({ camera, onStatusChange }: Props) {
           autoPlay
           muted
           playsInline
-          crossOrigin="anonymous"
           className="h-full w-full bg-black object-cover"
         />
       )}
