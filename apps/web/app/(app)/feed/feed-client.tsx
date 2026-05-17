@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export interface FeedItem {
@@ -295,84 +295,202 @@ export function FeedClient({ items }: Props) {
 }
 
 function DetailPane({ item }: { item: FeedItem }) {
+  // Try iframe first; fall back to metadata view if the site blocks embed.
+  const [mode, setMode] = useState<"web" | "meta">(item.sourceUrl ? "web" : "meta");
+  const [iframeFailed, setIframeFailed] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const loadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Reset state when the selected item changes.
+  useEffect(() => {
+    setIframeFailed(false);
+    setMode(item.sourceUrl ? "web" : "meta");
+  }, [item.id, item.sourceUrl]);
+
+  // If iframe doesn't fire onLoad within 6s, assume it's blocked.
+  useEffect(() => {
+    if (mode !== "web" || !item.sourceUrl) return;
+    if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
+    setIframeFailed(false);
+    loadTimerRef.current = setTimeout(() => setIframeFailed(true), 6_000);
+    return () => {
+      if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
+    };
+  }, [item.sourceUrl, mode]);
+
   return (
-    <article className="flex flex-col">
-      <header className="border-b border-neutral-200 px-4 py-3">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <span
-            className={cn(
-              "shrink-0 border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest",
-              SEVERITY_BADGE[item.severity],
-            )}
-          >
-            {item.severity}
-          </span>
-          <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">
-            {item.crimeType.replace(/_/g, " ")}
-          </span>
-          <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
-            {relativeDate(item.publishedAt)} · {formatDate(item.publishedAt)}
-          </span>
+    <article className="flex h-full flex-col">
+      {/* Slim sticky header — severity, crime, date, mode toggle, external link */}
+      <header className="flex items-start justify-between gap-3 border-b border-neutral-200 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span
+              className={cn(
+                "shrink-0 border px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest",
+                SEVERITY_BADGE[item.severity],
+              )}
+            >
+              {item.severity}
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">
+              {item.crimeType.replace(/_/g, " ")}
+            </span>
+            <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+              {relativeDate(item.publishedAt)} · {item.source}
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-2 font-mono text-[12px] leading-snug text-black">
+            {item.title}
+          </p>
         </div>
-        <h2 className="mt-2 font-mono text-sm leading-snug text-black">
-          {item.title}
-        </h2>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {item.sourceUrl && (
+            <div className="flex border border-neutral-200">
+              <button
+                type="button"
+                onClick={() => setMode("web")}
+                className={cn(
+                  "px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest",
+                  mode === "web"
+                    ? "bg-black text-white"
+                    : "bg-white text-neutral-500 hover:text-black",
+                )}
+                title="Render the article in the panel"
+              >
+                Web
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("meta")}
+                className={cn(
+                  "border-l border-neutral-200 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-widest",
+                  mode === "meta"
+                    ? "bg-black text-white"
+                    : "bg-white text-neutral-500 hover:text-black",
+                )}
+                title="Show summary + location only"
+              >
+                Info
+              </button>
+            </div>
+          )}
+          {item.sourceUrl && (
+            <a
+              href={item.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[9px] uppercase tracking-widest text-neutral-400 hover:text-black"
+            >
+              open ↗
+            </a>
+          )}
+        </div>
       </header>
 
-      {item.summary && (
-        <section className="border-b border-neutral-200 px-4 py-3">
-          <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-            Summary
-          </h3>
-          <p className="mt-1 font-mono text-[12px] leading-relaxed text-neutral-800">
-            {item.summary}
-          </p>
-        </section>
-      )}
-
-      <section className="border-b border-neutral-200 px-4 py-3">
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          Location
-        </h3>
-        <p className="mt-1 font-mono text-[12px]">
-          {item.address ?? "—"}
-          {item.neighborhood && (
-            <span className="text-neutral-500"> · {item.neighborhood}</span>
+      {mode === "web" && item.sourceUrl ? (
+        <div className="relative flex-1 overflow-hidden bg-white">
+          <iframe
+            ref={iframeRef}
+            src={item.sourceUrl}
+            // sandbox keeps us from inheriting cookies / running malicious top-level
+            // navigations; allow-same-origin is needed for many news sites to fetch
+            // their own JS, allow-scripts so the page actually renders.
+            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms"
+            referrerPolicy="no-referrer"
+            onLoad={() => {
+              if (loadTimerRef.current) clearTimeout(loadTimerRef.current);
+              setIframeFailed(false);
+            }}
+            className="h-full w-full border-0"
+            data-no-invert
+          />
+          {iframeFailed && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-white/95 p-6 text-center backdrop-blur">
+              <p className="font-mono text-[11px] text-neutral-700">
+                This site blocks embedded rendering.
+              </p>
+              <p className="font-mono text-[10px] text-neutral-500">
+                It&apos;s a common security header — most outlets do this. The summary
+                view still has the article details.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMode("meta")}
+                  className="border border-neutral-200 bg-white px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-neutral-600 hover:border-black hover:text-black"
+                >
+                  show summary
+                </button>
+                <a
+                  href={item.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="border border-black bg-black px-2 py-1 font-mono text-[10px] uppercase tracking-widest text-white"
+                >
+                  open in new tab ↗
+                </a>
+              </div>
+            </div>
           )}
-        </p>
-        <p className="mt-0.5 font-mono text-[10px] tabular-nums text-neutral-400">
-          {item.lat.toFixed(4)}, {item.lng.toFixed(4)}
-        </p>
-      </section>
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          {item.summary && (
+            <section className="border-b border-neutral-200 px-4 py-3">
+              <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+                Summary
+              </h3>
+              <p className="mt-1 font-mono text-[12px] leading-relaxed text-neutral-800">
+                {item.summary}
+              </p>
+            </section>
+          )}
 
-      <section className="border-b border-neutral-200 px-4 py-3">
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          Source
-        </h3>
-        <p className="mt-1 font-mono text-[12px]">{item.source}</p>
-        {item.sourceUrl && (
-          <a
-            href={item.sourceUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-baseline gap-1 font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black"
-          >
-            read original →
-          </a>
-        )}
-      </section>
+          <section className="border-b border-neutral-200 px-4 py-3">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+              Location
+            </h3>
+            <p className="mt-1 font-mono text-[12px]">
+              {item.address ?? "—"}
+              {item.neighborhood && (
+                <span className="text-neutral-500"> · {item.neighborhood}</span>
+              )}
+            </p>
+            <p className="mt-0.5 font-mono text-[10px] tabular-nums text-neutral-400">
+              {item.lat.toFixed(4)}, {item.lng.toFixed(4)}
+            </p>
+          </section>
 
-      <section className="px-4 py-3">
-        <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          On the map
-        </h3>
-        <a
-          href={`/map?lat=${item.lat}&lng=${item.lng}`}
-          className="mt-1 inline-flex items-baseline gap-1 font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black"
-        >
-          open in map view →
-        </a>
-      </section>
+          <section className="border-b border-neutral-200 px-4 py-3">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+              Source
+            </h3>
+            <p className="mt-1 font-mono text-[12px]">{item.source}</p>
+            {item.sourceUrl && (
+              <a
+                href={item.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex items-baseline gap-1 font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black"
+              >
+                read original →
+              </a>
+            )}
+          </section>
+
+          <section className="px-4 py-3">
+            <h3 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+              On the map
+            </h3>
+            <a
+              href={`/map?lat=${item.lat}&lng=${item.lng}`}
+              className="mt-1 inline-flex items-baseline gap-1 font-mono text-[10px] uppercase tracking-widest text-neutral-500 hover:text-black"
+            >
+              open in map view →
+            </a>
+          </section>
+        </div>
+      )}
     </article>
   );
 }
