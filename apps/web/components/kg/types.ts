@@ -84,25 +84,26 @@ export interface NeighborhoodCluster {
   nodeIds: string[];
   incidentCount: number;
   alertCount: number; // unacknowledged
-  maxSeverity: number;
+  maxSeverity: number; // 0 when no incidents; otherwise the max incident severity in this neighborhood
 }
 
-/** Aggregated arc between two neighborhood clusters. */
+/** Aggregated arc between two neighborhood clusters (endpoints are neighborhood names). */
 export interface ClusterEdge {
   id: string;
-  a: string;
-  b: string;
+  from: string; // neighborhood name
+  to: string;   // neighborhood name
   weight: number;
 }
 
 /** Collapsed "+N <kind> ⊕" stub in the Tier-2 detail view. */
 export interface StubNode {
-  id: string;
+  id: string; // synthetic, format: `stub:${neighborhood}:${kind}`
   neighborhood: string;
   kind: KgNodeKind;
   count: number;
 }
 
+/** Which tier the KG is showing: the overview map or one neighborhood's detail. */
 export type KgView =
   | { mode: "overview" }
   | { mode: "detail"; neighborhood: string };
