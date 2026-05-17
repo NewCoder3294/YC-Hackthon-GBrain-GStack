@@ -118,12 +118,10 @@ function Hero() {
             <FlashWord delay={1200}>Every query auditable.</FlashWord>
           </h1>
           <p className="mt-8 max-w-xl font-mono text-sm leading-relaxed text-neutral-700">
-            A 911 hangup, a streetlight camera detection, a ShotSpotter ping —
-            today they sit in three systems watched by three humans. WatchDog
-            correlates them into one dispatcher view with institutional memory
-            of every prior incident. <span className="text-black">Every byte
-            on this site is real data — live SFPD scanner audio, live SF
-            cameras, live dispatch records.</span>
+            Three live feeds — SFPD scanner, SF cameras, SFGov dispatch —
+            in one operator view, with memory of every prior incident.{" "}
+            <span className="text-black">All data on this site is real,
+            pulled live.</span>
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
@@ -194,7 +192,7 @@ function HookStat() {
     <section className="border-b border-neutral-200 bg-black text-white overflow-hidden">
       <div ref={ref} className="mx-auto max-w-4xl px-6 py-20 text-center md:py-28">
         <p
-          className="font-mono text-[10px] uppercase tracking-widest text-neutral-400"
+          className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-400 md:text-sm"
           style={fadeUp(0)}
         >
           Why this exists
@@ -219,19 +217,6 @@ function HookStat() {
           style={fadeUp(620)}
         >
           Source · Bureau of Justice Statistics
-        </p>
-        <p
-          className="mx-auto mt-8 max-w-2xl font-mono text-xs leading-relaxed text-neutral-300 md:text-base"
-          style={fadeUp(780)}
-        >
-          A crime that never gets called in still leaves a trace.{" "}
-          <span className="text-white">A streetlight catches it.
-          A scanner picks up the response. A 911 hangup half-completes.</span>{" "}
-          WatchDog reads those traces the moment they happen, fuses them
-          across silos, and hands the dispatcher one ranked queue.
-          <span className="block mt-3 text-white">
-            Every byte on this page is real, pulled live.
-          </span>
         </p>
       </div>
     </section>
@@ -560,10 +545,7 @@ function HowItWorks() {
             </span>
           </div>
           <p className="mt-6 max-w-2xl font-mono text-sm leading-relaxed text-neutral-700">
-            Three siloed signal streams become one ranked queue, an
-            institutional memory of every prior decision, and an operator
-            console that approves, reassigns, or kills every dispatch
-            before it goes out.
+            Three feeds → one queue → one decision.
           </p>
         </div>
       </section>
@@ -572,11 +554,11 @@ function HowItWorks() {
         n="01"
         title="Fusion"
         kicker="Correlate signals across silos"
-        caption="A 911 hangup, a streetlight pose detection, a citizen report, and a ShotSpotter ping arrive in four different systems. WatchDog joins them on a 200 m / 60 s window and emits one ranked incident with the strongest evidence on top."
+        caption="Camera, 911, and ShotSpotter signals get matched on a 200 m / 60 s window into one ranked incident."
         bullets={[
-          "Spatial-temporal cosine match across CAM, 911, RPT, SHT",
-          "Severity scored from source confidence + signal density",
-          "Replaces four dashboards with one queue per dispatcher",
+          "Spatial-temporal match across CAM · 911 · SHT",
+          "Severity = source confidence × signal density",
+          "Three dashboards → one queue",
         ]}
         diagram={<FusionDiagram />}
       />
@@ -586,11 +568,11 @@ function HowItWorks() {
         title="Memory"
         kicker="Carry context to the next signal"
         mirror
-        caption="Every reviewed incident — dismissed, held, or escalated — writes to GBrain as a memory chip on that corner. The next signal at the same place arrives with all prior decisions, baselines, and dispatcher notes already attached."
+        caption="Every reviewed incident becomes a memory chip on that corner. The next signal there arrives with the history attached."
         bullets={[
-          "Per-location memory store: outcomes, reasons, baselines",
-          "Pattern recall surfaces 'this looked the same 4× last month'",
-          "Reduces false dispatch from familiar corners over time",
+          "Per-location store of outcomes + reasons",
+          "Recalls patterns: 'same shape 4× last month'",
+          "Fewer false dispatches over time",
         ]}
         diagram={<MemoryDiagram />}
       />
@@ -598,12 +580,12 @@ function HowItWorks() {
       <HowStep
         n="03"
         title="Decision"
-        kicker="Approve, reassign, or kill — predicted and live"
-        caption="Predicted incidents (GBrain correlated something across signals) and live dispatches (a real call just came in) land in the same queue with an officer pre-assigned by talkgroup affinity. The operator has a 30-second window to approve, reassign, or cancel before the dispatch auto-fires. Every decision writes back to memory."
+        kicker="Approve, reassign, or kill"
+        caption="One queue for predicted + live calls. Each card auto-assigns an officer. 30 seconds to act, or it dispatches."
         bullets={[
-          "One queue for predicted + actual — no separate inbox",
-          "30s visible countdown before auto-dispatch fires",
-          "Cancel / reassign / approve per card — every action audited",
+          "Predicted + live in one queue",
+          "30s to act, or it auto-dispatches",
+          "Every decision audited",
         ]}
         diagram={<DecisionDiagram />}
       />
@@ -715,6 +697,8 @@ function ZoneFrame({
   h,
   step,
   label,
+  openLeft,
+  openRight,
 }: {
   x: number;
   y: number;
@@ -722,18 +706,30 @@ function ZoneFrame({
   h: number;
   step: string;
   label: string;
+  openLeft?: boolean;
+  openRight?: boolean;
 }) {
+  const dash = "2 3";
   return (
     <g>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        fill="white"
-        stroke={DIAGRAM_MUTED}
-        strokeDasharray="2 3"
-      />
+      <rect x={x} y={y} width={w} height={h} fill="white" stroke="transparent" />
+      {/* top */}
+      <line x1={x} y1={y} x2={x + w} y2={y} stroke={DIAGRAM_MUTED} strokeDasharray={dash} />
+      {/* bottom */}
+      <line x1={x} y1={y + h} x2={x + w} y2={y + h} stroke={DIAGRAM_MUTED} strokeDasharray={dash} />
+      {!openLeft && (
+        <line x1={x} y1={y} x2={x} y2={y + h} stroke={DIAGRAM_MUTED} strokeDasharray={dash} />
+      )}
+      {!openRight && (
+        <line
+          x1={x + w}
+          y1={y}
+          x2={x + w}
+          y2={y + h}
+          stroke={DIAGRAM_MUTED}
+          strokeDasharray={dash}
+        />
+      )}
       <text
         x={x + 8}
         y={y + 14}
@@ -766,9 +762,9 @@ function FusionDiagram() {
       aria-label="Fusion diagram"
     >
       <ArrowDef id="arr-fusion" />
-      <ZoneFrame x={4} y={4} w={180} h={272} step="01" label="signals" />
-      <ZoneFrame x={196} y={4} w={132} h={272} step="02" label="correlator" />
-      <ZoneFrame x={340} y={4} w={136} h={272} step="03" label="incident" />
+      <ZoneFrame x={4} y={4} w={180} h={272} step="01" label="signals" openRight />
+      <ZoneFrame x={196} y={4} w={132} h={272} step="02" label="correlator" openLeft openRight />
+      <ZoneFrame x={340} y={4} w={136} h={272} step="03" label="incident" openLeft />
 
       {sources.map((s, i) => {
         const y = baseY + i * rowH;
@@ -897,9 +893,9 @@ function MemoryDiagram() {
       aria-label="Memory diagram"
     >
       <ArrowDef id="arr-memory" />
-      <ZoneFrame x={4} y={4} w={156} h={332} step="01" label="review" />
-      <ZoneFrame x={172} y={4} w={192} h={332} step="02" label="gbrain" />
-      <ZoneFrame x={376} y={4} w={140} h={332} step="03" label="recall" />
+      <ZoneFrame x={4} y={4} w={156} h={332} step="01" label="review" openRight />
+      <ZoneFrame x={172} y={4} w={192} h={332} step="02" label="gbrain" openLeft openRight />
+      <ZoneFrame x={376} y={4} w={140} h={332} step="03" label="recall" openLeft />
 
       {/* Review zone — bigger incident card. */}
       <rect x={20} y={56} width={124} height={240} fill="white" stroke={DIAGRAM_STROKE} />
