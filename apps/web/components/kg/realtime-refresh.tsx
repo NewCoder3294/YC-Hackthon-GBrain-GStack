@@ -14,20 +14,20 @@ const WATCHED_TABLES = [
   "decisions",
   "pages",
   "gang_events",
-  // from origin/main: keep /live in sync on SFPD CAD sync bursts
   "live_incidents",
 ] as const;
 
-const FLASH_DURATION_MS = 1200;
-const ROUTER_REFRESH_DEBOUNCE_MS = 800;
+const REFRESH_DEBOUNCE_MS = 2000;
 
 /**
- * Subscribes to Postgres realtime changes on the GBrain-shaped tables.
- * The "Updated" pip flashes immediately on every event (leading edge) so
- * the dispatcher sees liveness, but router.refresh() is debounced
- * (trailing edge, ROUTER_REFRESH_DEBOUNCE_MS) to coalesce event bursts
- * into a single server re-render. This pip/refresh decoupling is
- * intentional — do not "sync" the pip to the refresh timing.
+ * Subscribes to Postgres realtime changes on the GBrain + live_incidents
+ * tables and calls router.refresh() so server components re-run and the
+ * UI redraws with the new data.
+ *
+ * Refreshes are debounced (2s window) so a burst of inserts — e.g.,
+ * SFPD CAD sync writing dozens of rows — collapses to one re-render.
+ *
+ * A small "● live" status pip flashes whenever a refresh has just fired.
  */
 export function RealtimeRefresh({ channelName = "kg-live" }: Props) {
   const router = useRouter();
@@ -47,16 +47,20 @@ export function RealtimeRefresh({ channelName = "kg-live" }: Props) {
           lastEventRef.current = `${payload.table}:${payload.eventType}`;
           setFlash(true);
           if (flashTimer.current) clearTimeout(flashTimer.current);
-          flashTimer.current = setTimeout(() => setFlash(false), FLASH_DURATION_MS);
+          flashTimer.current = setTimeout(() => setFlash(false), 1200);
+          // Debounce refresh: collapse burst inserts into one re-render.
           if (refreshTimer.current) clearTimeout(refreshTimer.current);
-          refreshTimer.current = setTimeout(() => router.refresh(), ROUTER_REFRESH_DEBOUNCE_MS);
+          refreshTimer.current = setTimeout(() => {
+            refreshTimer.current = null;
+            router.refresh();
+          }, REFRESH_DEBOUNCE_MS);
         },
       );
     }
     channel.subscribe();
     return () => {
-      if (refreshTimer.current) clearTimeout(refreshTimer.current);
       if (flashTimer.current) clearTimeout(flashTimer.current);
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
       supabase.removeChannel(channel);
     };
   }, [router, channelName]);

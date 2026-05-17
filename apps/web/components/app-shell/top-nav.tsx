@@ -31,7 +31,6 @@ export function TopNav() {
           <NavLink href={"/live" as Route} label="Live" />
           <NavLink href={"/kg" as Route} label="Knowledge Graph" />
           <NavLink href={"/incidents" as Route} label="Incidents" />
-          <NavLink href={"/triage" as Route} label="Triage" />
           <NavLink href={"/enrichment" as Route} label="Web Search" />
           <NavLink href={"/feed" as Route} label="Feed" />
           <NavLink href={"/openclaw" as Route} label="NemoClaw" />

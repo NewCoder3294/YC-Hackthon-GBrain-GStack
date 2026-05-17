@@ -16,13 +16,3 @@ export {
 } from "./signal-events";
 export { createLogger, type Logger } from "./logger";
 export { dbFromEnv } from "./db";
-export {
-  runCorrelation,
-  correlate,
-  type CorrelationSummary,
-} from "./correlate/pipeline";
-export {
-  createAdjudicator,
-  deterministicAdjudicator,
-  type Adjudicator,
-} from "./correlate/adjudicate";

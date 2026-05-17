@@ -16,7 +16,6 @@
     "calls": "tsx src/calls/run.ts",
     "datasf": "tsx src/datasf/run.ts",
     "baseline": "tsx src/baseline/run.ts",
-    "correlate": "tsx src/correlate/run.ts",
     "db:apply": "tsx src/apply-migration.ts",
     "db:stats": "tsx src/check-signals.ts"
   },

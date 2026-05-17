@@ -4,13 +4,6 @@ import type { KgEdge, KgNode } from "@/components/kg/types";
 import { isHighPriority, priorityLabel } from "@/lib/dispatch";
 import { loadDispatchCatalog } from "@/lib/dispatch-catalog";
 import { createFeedCursor, nextDispatch } from "@/lib/dispatch-feed";
-import {
-  resolveNeighborhood,
-  nearestHotspot,
-  matchHotspotByName,
-  UNMAPPED,
-  type NeighborhoodContext,
-} from "@/lib/kg/neighborhoods";
 
 interface GangRow {
   id: string;
@@ -411,11 +404,7 @@ export async function loadKgFromSupabase(): Promise<{
   }
 
   for (const r of gbrainRecords) {
-    if (
-      r.kind === "pattern" ||
-      r.kind === "baseline" ||
-      r.kind === "incident"
-    ) {
+    if (r.kind === "pattern" || r.kind === "baseline") {
       const meta: Record<string, string | number> = { source: r.source };
       if (r.confidence != null) meta.confidence = Number(r.confidence).toFixed(2);
       if (r.samples != null) meta.samples = r.samples;
@@ -606,90 +595,6 @@ export async function loadKgFromSupabase(): Promise<{
         label: "affects",
       });
     }
-  }
-
-  // --- Derive a neighborhood for every node (Overview+Detail redesign) ---
-  const gangNeighborhood = new Map<string, string>();
-  for (const g of gangs) {
-    const terr = territories.filter((t) => t.gang_id === g.id);
-    if (terr.length) {
-      const counts = new Map<string, number>();
-      for (const t of terr) {
-        const nb = nearestHotspot(t.center_lat, t.center_lng);
-        counts.set(nb, (counts.get(nb) ?? 0) + 1);
-      }
-      const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
-      if (top) gangNeighborhood.set(`gang:${g.id}`, top[0]);
-    }
-  }
-
-  const memberToGang = new Map<string, string>();
-  for (const m of members) {
-    if (m.gang_id) memberToGang.set(`member:${m.id}`, `gang:${m.gang_id}`);
-  }
-
-  const incidentNeighborhood = new Map<string, string>();
-  for (const i of incidents) {
-    const ev = events.find(
-      (e) => e.related_incident_id === i.id && e.lat != null && e.lng != null,
-    );
-    if (ev && ev.lat != null && ev.lng != null) {
-      incidentNeighborhood.set(`inc:${i.id}`, nearestHotspot(ev.lat, ev.lng));
-      continue;
-    }
-    if (i.suspect_gang_id) {
-      const nb = gangNeighborhood.get(`gang:${i.suspect_gang_id}`);
-      if (nb) {
-        incidentNeighborhood.set(`inc:${i.id}`, nb);
-        continue;
-      }
-    }
-    const cam = i.clips[0]?.cameras ?? null;
-    if (cam) {
-      const camMatch = matchHotspotByName(`${cam.route} ${cam.description ?? ""}`);
-      if (camMatch) incidentNeighborhood.set(`inc:${i.id}`, camMatch);
-    }
-  }
-
-  const nctx: NeighborhoodContext = {
-    gangNeighborhood,
-    memberToGang,
-    incidentNeighborhood,
-  };
-
-  // territories carry coords -> bake into meta so the resolver can use them
-  for (const n of nodes) {
-    if (n.kind === "territory") {
-      const tid = n.id.replace(/^territory:/, "");
-      const t = territories.find((x) => x.id === tid);
-      if (t) {
-        n.meta = { ...(n.meta ?? {}), lat: t.center_lat, lng: t.center_lng };
-      }
-    }
-    if (n.kind === "event") {
-      const eid = n.id.replace(/^event:/, "");
-      const e = events.find((x) => String(x.id) === eid);
-      if (e && e.lat != null && e.lng != null) {
-        n.meta = { ...(n.meta ?? {}), lat: e.lat, lng: e.lng };
-      }
-    }
-  }
-
-  // pass 1: gangs, members, incidents, territories, events
-  for (const n of nodes) {
-    n.neighborhood = resolveNeighborhood(n, nctx);
-  }
-
-  // pass 2: alerts/decisions/arrests/baselines/patterns/locations inherit
-  // from the incident or gang they connect to via edges
-  const nbById = new Map(nodes.map((n) => [n.id, n.neighborhood ?? UNMAPPED]));
-  for (const n of nodes) {
-    if (n.neighborhood && n.neighborhood !== UNMAPPED) continue;
-    const resolved = edges
-      .filter((e) => e.source === n.id || e.target === n.id)
-      .map((e) => nbById.get(e.source === n.id ? e.target : e.source))
-      .find((nb) => nb && nb !== UNMAPPED);
-    n.neighborhood = resolved ?? UNMAPPED;
   }
 
   return { nodes, edges };

@@ -17,8 +17,8 @@ interface Props {
   neighbors: Neighbor[];
   onClose: () => void;
   onNavigate: (id: string) => void;
-  onTrace?: (() => void) | undefined;
-  tracing?: boolean | undefined;
+  onTrace: () => void;
+  tracing: boolean;
 }
 
 export function KgInspector({
@@ -77,26 +77,22 @@ export function KgInspector({
 
         {node.kind === "incident" && (
           <div className="space-y-3 border-t border-neutral-200 px-3 py-3">
-            {onTrace && (
-              <>
-                <button
-                  type="button"
-                  onClick={onTrace}
-                  className={cn(
-                    "w-full border px-2 py-1.5 font-mono text-[10px] uppercase tracking-widest transition-colors",
-                    tracing
-                      ? "border-black bg-black text-white"
-                      : "border-neutral-300 hover:border-black",
-                  )}
-                >
-                  {tracing ? "Tracing prior context…" : "Trace prior context"}
-                </button>
-                <p className="font-mono text-[10px] leading-relaxed text-neutral-500">
-                  Highlights the patterns + baselines GBrain surfaces when this
-                  incident lands.
-                </p>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={onTrace}
+              className={cn(
+                "w-full border px-2 py-1.5 font-mono text-[10px] uppercase tracking-widest transition-colors",
+                tracing
+                  ? "border-black bg-black text-white"
+                  : "border-neutral-300 hover:border-black",
+              )}
+            >
+              {tracing ? "Tracing prior context…" : "Trace prior context"}
+            </button>
+            <p className="font-mono text-[10px] leading-relaxed text-neutral-500">
+              Highlights the patterns + baselines GBrain surfaces when this
+              incident lands.
+            </p>
             <div className="border-t border-neutral-200 pt-3">
               <h3 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
                 Dispatcher decision
