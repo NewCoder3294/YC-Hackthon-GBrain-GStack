@@ -2,11 +2,8 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { KgEdge, KgNode } from "@/components/kg/types";
 import { isHighPriority, priorityLabel } from "@/lib/dispatch";
-import { scanDispatchAudio } from "@/lib/dispatch-audio-scan";
-import {
-  createSimulatorState,
-  nextDispatchCall,
-} from "@/lib/dispatch-simulator";
+import { loadDispatchCatalog } from "@/lib/dispatch-catalog";
+import { createFeedCursor, nextDispatch } from "@/lib/dispatch-feed";
 
 interface GangRow {
   id: string;
@@ -225,10 +222,9 @@ export async function loadKgFromSupabase(): Promise<{
       )
       .order("occurred_at", { ascending: false })
       .limit(40),
-    // Real SFPD scanner audio (captured from openmhz.com, stored under
-    // /public/dispatch-audio/). KG generates a small snapshot of recent
-    // calls using the same simulator that drives the live map.
-    scanDispatchAudio(),
+    // Dispatch catalog — KG renders a small snapshot of recent calls
+    // alongside the live map's stream.
+    loadDispatchCatalog(),
   ]);
 
   const gangs = (gangsRes.data ?? []) as GangRow[];
@@ -515,16 +511,14 @@ export async function loadKgFromSupabase(): Promise<{
     }
   }
 
-  // Dispatch (audio) nodes — generate a snapshot of recent SFPD scanner
-  // calls using the same simulator that drives the live map. KG shows
-  // what the operator has been hearing, with seeded neighborhood location
-  // nodes for place-of-occurrence context. Capped so the graph stays
-  // legible.
+  // Dispatch nodes — recent calls projected into the graph alongside
+  // neighborhood location nodes for place-of-occurrence context. Capped
+  // so the graph stays legible.
   if (audioFiles.length > 0) {
-    const kgSim = createSimulatorState(audioFiles);
+    const kgSim = createFeedCursor(audioFiles);
     const sampleSize = Math.min(20, audioFiles.length * 3);
     for (let i = 0; i < sampleSize; i++) {
-      const call = nextDispatchCall(kgSim);
+      const call = nextDispatch(kgSim);
       const placeName = call.neighborhood || call.district || "SF · unknown area";
       const locId = neighborhoodId(placeName);
       if (!seenLocations.has(locId)) {

@@ -21,7 +21,6 @@ const SCENARIO: Omit<Signal, "id" | "ts">[] = [
   { source: "camera", location: "MISSION & 16TH", detail: "pose: fighting · 0.87", severity: "med" },
   { source: "call", location: "MISSION & 16TH", detail: "911 hangup", severity: "med" },
   { source: "shotspotter", location: "MISSION & 16TH", detail: "single report", severity: "high" },
-  { source: "citizen", location: "MISSION & 16TH", detail: "\"two men arguing\"", severity: "high" },
 ];
 
 const SOURCE_GLYPH: Record<SourceType, string> = {
@@ -44,6 +43,7 @@ export function Landing() {
     <main className="relative min-h-screen overflow-x-hidden bg-white text-black">
       <Header />
       <Hero />
+      <HookStat />
       <HowItWorks />
       <Pillars />
       <NotSection />
@@ -118,11 +118,10 @@ function Hero() {
             <FlashWord delay={1200}>Every query auditable.</FlashWord>
           </h1>
           <p className="mt-8 max-w-xl font-mono text-sm leading-relaxed text-neutral-700">
-            A 911 hangup, a streetlight camera detection, a citizen report, a
-            ShotSpotter ping — today they sit in four systems watched by four
-            humans. WatchDog correlates them into one dispatcher view, with
-            institutional memory of every prior incident and symmetric
-            transparency for the camera owners whose feeds are being queried.
+            Three live feeds — SFPD scanner, SF cameras, SFGov dispatch —
+            in one operator view, with memory of every prior incident.{" "}
+            <span className="text-black">All data on this site is real,
+            pulled live.</span>
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link
@@ -141,6 +140,84 @@ function Hero() {
           <StatStrip />
         </div>
         <SignalFeed />
+      </div>
+    </section>
+  );
+}
+
+// IntersectionObserver hook. Returns [ref, inView]. `inView` flips true
+// the first time the element enters the viewport and stays true (so the
+// reveal animation plays exactly once when the user scrolls past).
+function useInView<T extends Element>(
+  options: IntersectionObserverInit = { threshold: 0.25 },
+): [React.RefObject<T | null>, boolean] {
+  const ref = useRef<T | null>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting) {
+        setInView(true);
+        io.disconnect();
+      }
+    }, options);
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return [ref, inView];
+}
+
+function HookStat() {
+  const [ref, inView] = useInView<HTMLDivElement>({ threshold: 0.3 });
+
+  // Slide-in choreography. Each line picks up a stagger delay so the
+  // viewer's eye is pulled left-to-right (kicker -> 62% -> rest).
+  const fadeUp = (delay: number) => ({
+    opacity: inView ? 1 : 0,
+    transform: inView ? "translateY(0)" : "translateY(16px)",
+    transition: `opacity 700ms ease-out ${delay}ms, transform 700ms ease-out ${delay}ms`,
+  });
+  const slideInBig = inView
+    ? {
+        opacity: 1,
+        transform: "translateX(0) scale(1)",
+        transition:
+          "opacity 800ms cubic-bezier(0.16, 1, 0.3, 1) 120ms, transform 800ms cubic-bezier(0.16, 1, 0.3, 1) 120ms",
+      }
+    : { opacity: 0, transform: "translateX(-160px) scale(0.7)" };
+
+  return (
+    <section className="border-b border-neutral-200 bg-black text-white overflow-hidden">
+      <div ref={ref} className="mx-auto max-w-4xl px-6 py-20 text-center md:py-28">
+        <p
+          className="font-mono text-xs uppercase tracking-[0.25em] text-neutral-400 md:text-sm"
+          style={fadeUp(0)}
+        >
+          Why this exists
+        </p>
+        <p className="mt-6 font-mono text-3xl leading-[1.15] tracking-tight md:text-5xl">
+          <span
+            className="block tabular-nums text-white md:text-[7rem] md:leading-none"
+            style={{ fontVariantNumeric: "tabular-nums", ...slideInBig }}
+          >
+            62%
+          </span>
+          <span
+            className="mt-4 block text-neutral-300 md:text-4xl"
+            style={fadeUp(420)}
+          >
+            of violent crimes in major urban areas go completely{" "}
+            <span className="text-white">unreported</span> to law enforcement.
+          </span>
+        </p>
+        <p
+          className="mt-6 font-mono text-[10px] uppercase tracking-widest text-neutral-500"
+          style={fadeUp(620)}
+        >
+          Source · Bureau of Justice Statistics
+        </p>
       </div>
     </section>
   );
@@ -251,7 +328,7 @@ function YCBadge() {
 type FeedPhase = "idle" | "ingesting" | "fusing" | "fused" | "held";
 
 function SignalFeed() {
-  const [filled, setFilled] = useState<(Signal | null)[]>([null, null, null, null]);
+  const [filled, setFilled] = useState<(Signal | null)[]>([null, null, null]);
   const [phase, setPhase] = useState<FeedPhase>("idle");
   const counterRef = useRef(0);
 
@@ -260,7 +337,7 @@ function SignalFeed() {
 
     async function run() {
       while (!cancelled) {
-        setFilled([null, null, null, null]);
+        setFilled([null, null, null]);
         setPhase("idle");
         await wait(700);
         if (cancelled) return;
@@ -351,7 +428,7 @@ function SignalRow({
   index: number;
   fusing: boolean;
 }) {
-  const PLACEHOLDER_ORDER = ["camera", "call", "shotspotter", "citizen"] as const satisfies readonly SourceType[];
+  const PLACEHOLDER_ORDER = ["camera", "call", "shotspotter"] as const satisfies readonly SourceType[];
   const placeholderSrc: SourceType =
     PLACEHOLDER_ORDER[index % PLACEHOLDER_ORDER.length] ?? "camera";
   return (
@@ -468,9 +545,7 @@ function HowItWorks() {
             </span>
           </div>
           <p className="mt-6 max-w-2xl font-mono text-sm leading-relaxed text-neutral-700">
-            Four siloed signal streams become one ranked queue, an institutional
-            memory of every prior decision, and a public audit trail the camera
-            owner controls.
+            Three feeds → one queue → one decision.
           </p>
         </div>
       </section>
@@ -479,11 +554,11 @@ function HowItWorks() {
         n="01"
         title="Fusion"
         kicker="Correlate signals across silos"
-        caption="A 911 hangup, a streetlight pose detection, a citizen report, and a ShotSpotter ping arrive in four different systems. WatchDog joins them on a 200 m / 60 s window and emits one ranked incident with the strongest evidence on top."
+        caption="Camera, 911, and ShotSpotter signals get matched on a 200 m / 60 s window into one ranked incident."
         bullets={[
-          "Spatial-temporal cosine match across CAM, 911, RPT, SHT",
-          "Severity scored from source confidence + signal density",
-          "Replaces four dashboards with one queue per dispatcher",
+          "Spatial-temporal match across CAM · 911 · SHT",
+          "Severity = source confidence × signal density",
+          "Three dashboards → one queue",
         ]}
         diagram={<FusionDiagram />}
       />
@@ -493,26 +568,26 @@ function HowItWorks() {
         title="Memory"
         kicker="Carry context to the next signal"
         mirror
-        caption="Every reviewed incident — dismissed, held, or escalated — writes to GBrain as a memory chip on that corner. The next signal at the same place arrives with all prior decisions, baselines, and dispatcher notes already attached."
+        caption="Every reviewed incident becomes a memory chip on that corner. The next signal there arrives with the history attached."
         bullets={[
-          "Per-location memory store: outcomes, reasons, baselines",
-          "Pattern recall surfaces 'this looked the same 4× last month'",
-          "Reduces false dispatch from familiar corners over time",
+          "Per-location store of outcomes + reasons",
+          "Recalls patterns: 'same shape 4× last month'",
+          "Fewer false dispatches over time",
         ]}
         diagram={<MemoryDiagram />}
       />
 
       <HowStep
         n="03"
-        title="Consent"
-        kicker="Owner-authored access, both ways logged"
-        caption="Camera owners — homeowners, businesses, CalTrans — author the policy themselves: geofence, time windows, incident types, warrant requirements. The gate runs as code on every police query. Allowed and denied alike are written to the owner's audit log."
+        title="Decision"
+        kicker="Approve, reassign, or kill"
+        caption="One queue for predicted + live calls. Each card auto-assigns an officer. 30 seconds to act, or it dispatches."
         bullets={[
-          "Policy-as-code: declarative rules, no human-in-the-loop required",
-          "Symmetric audit: police and owner both see the access trail",
-          "Defaults to deny when a rule is missing — never opt-in by silence",
+          "Predicted + live in one queue",
+          "30s to act, or it auto-dispatches",
+          "Every decision audited",
         ]}
-        diagram={<ConsentDiagram />}
+        diagram={<DecisionDiagram />}
       />
     </>
   );
@@ -535,10 +610,23 @@ function HowStep({
   diagram: React.ReactNode;
   mirror?: boolean;
 }) {
+  const [sectionRef, inView] = useInView<HTMLDivElement>({ threshold: 0.18 });
   return (
     <section className="border-b border-neutral-200">
-      <div className="mx-auto max-w-6xl px-6 py-20 lg:py-24">
-        <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[5fr_7fr] lg:gap-16">
+      <div
+        ref={sectionRef}
+        className="mx-auto max-w-6xl px-6 py-20 lg:py-24"
+        style={{
+          opacity: inView ? 1 : 0,
+          transform: inView ? "translateY(0)" : "translateY(24px)",
+          transition: "opacity 700ms ease-out, transform 700ms ease-out",
+        }}
+      >
+        <div
+          className={`grid grid-cols-1 items-center gap-10 lg:gap-16 ${
+            mirror ? "lg:grid-cols-[5fr_2fr]" : "lg:grid-cols-[2fr_5fr]"
+          }`}
+        >
           <div className={mirror ? "lg:order-2" : ""}>
             <div className="flex items-baseline gap-4">
               <span className="font-mono text-5xl leading-none tracking-tight text-neutral-200 tabular-nums">
@@ -569,7 +657,7 @@ function HowStep({
             </ul>
           </div>
           <div className={mirror ? "lg:order-1" : ""}>
-            <div className="border border-neutral-200 bg-white p-4 md:p-6">
+            <div className="wd-diagram-shell border border-neutral-200 bg-white p-3 md:p-4">
               {diagram}
             </div>
           </div>
@@ -609,6 +697,8 @@ function ZoneFrame({
   h,
   step,
   label,
+  openLeft,
+  openRight,
 }: {
   x: number;
   y: number;
@@ -616,18 +706,30 @@ function ZoneFrame({
   h: number;
   step: string;
   label: string;
+  openLeft?: boolean;
+  openRight?: boolean;
 }) {
+  const dash = "2 3";
   return (
     <g>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        fill="white"
-        stroke={DIAGRAM_MUTED}
-        strokeDasharray="2 3"
-      />
+      <rect x={x} y={y} width={w} height={h} fill="white" stroke="transparent" />
+      {/* top */}
+      <line x1={x} y1={y} x2={x + w} y2={y} stroke={DIAGRAM_MUTED} strokeDasharray={dash} />
+      {/* bottom */}
+      <line x1={x} y1={y + h} x2={x + w} y2={y + h} stroke={DIAGRAM_MUTED} strokeDasharray={dash} />
+      {!openLeft && (
+        <line x1={x} y1={y} x2={x} y2={y + h} stroke={DIAGRAM_MUTED} strokeDasharray={dash} />
+      )}
+      {!openRight && (
+        <line
+          x1={x + w}
+          y1={y}
+          x2={x + w}
+          y2={y + h}
+          stroke={DIAGRAM_MUTED}
+          strokeDasharray={dash}
+        />
+      )}
       <text
         x={x + 8}
         y={y + 14}
@@ -647,48 +749,83 @@ function FusionDiagram() {
     { glyph: "CAM", label: "Streetlight 14B", ts: "22:50:01", meta: "pose: fighting · 0.87" },
     { glyph: "911", label: "Hangup", ts: "22:50:08", meta: "no callback" },
     { glyph: "SHT", label: "ShotSpotter", ts: "22:50:18", meta: "1 report" },
-    { glyph: "RPT", label: "Citizen", ts: "22:50:22", meta: "\"two men arguing\"" },
   ];
-  const baseY = 36;
-  const rowH = 32;
+  const rowH = 56;
+  const baseY = 60;
+  const [svgRef, inView] = useInView<SVGSVGElement>({ threshold: 0.35 });
   return (
-    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Fusion diagram">
+    <svg
+      ref={svgRef}
+      viewBox="0 0 480 280"
+      className="w-full"
+      role="img"
+      aria-label="Fusion diagram"
+    >
       <ArrowDef id="arr-fusion" />
-      <ZoneFrame x={4} y={4} w={180} h={272} step="01" label="signals" />
-      <ZoneFrame x={196} y={4} w={132} h={272} step="02" label="correlator" />
-      <ZoneFrame x={340} y={4} w={136} h={272} step="03" label="incident" />
+      <ZoneFrame x={4} y={4} w={180} h={272} step="01" label="signals" openRight />
+      <ZoneFrame x={196} y={4} w={132} h={272} step="02" label="correlator" openLeft openRight />
+      <ZoneFrame x={340} y={4} w={136} h={272} step="03" label="incident" openLeft />
 
       {sources.map((s, i) => {
         const y = baseY + i * rowH;
+        const initial = { opacity: 0, transform: "translateX(-8px)" };
+        const live = {
+          opacity: 1,
+          transform: "translateX(0)",
+          transition: `opacity 520ms ease-out ${i * 220}ms, transform 520ms ease-out ${i * 220}ms`,
+        };
         return (
-          <g key={s.glyph}>
-            <text x={16} y={y + 12} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+          <g
+            key={s.glyph}
+            className="wd-fusion-source"
+            style={{ cursor: "pointer", ...(inView ? live : initial) }}
+          >
+            <rect
+              className="wd-fusion-source-bg"
+              x={12}
+              y={y - 4}
+              width={168}
+              height={44}
+              rx={2}
+              fill="white"
+              stroke="transparent"
+            />
+            <text x={20} y={y + 8} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
               {s.ts}
             </text>
-            <rect x={16} y={y + 16} width={28} height={14} fill="white" stroke={DIAGRAM_STROKE} />
+            <rect
+              className="wd-fusion-source-chip"
+              x={20}
+              y={y + 12}
+              width={32}
+              height={16}
+              fill="white"
+              stroke={DIAGRAM_STROKE}
+            />
             <text
-              x={30}
-              y={y + 26}
+              x={36}
+              y={y + 23}
               textAnchor="middle"
               fontFamily={PX_MONO}
-              fontSize="8"
+              fontSize="9"
+              fontWeight="600"
               fill={DIAGRAM_STROKE}
             >
               {s.glyph}
             </text>
-            <text x={50} y={y + 26} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
+            <text x={58} y={y + 23} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
               {s.label}
             </text>
-            <text x={50} y={y + 12} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+            <text x={58} y={y + 35} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
               {s.meta}
             </text>
             <path
-              d={`M180,${y + 23} C 192,${y + 23} 200,140 232,140`}
+              className="wd-fusion-source-arrow"
+              d={`M180,${y + 20} C 198,${y + 20} 206,140 232,140`}
               fill="none"
               stroke={DIAGRAM_STROKE}
               strokeWidth="1"
               markerEnd="url(#arr-fusion)"
-              style={{ animation: `wd-fade-up 600ms ease-out ${i * 120}ms both` }}
             />
           </g>
         );
@@ -730,7 +867,7 @@ function FusionDiagram() {
         MED
       </text>
       <text x={400} y={180} fontFamily={PX_MONO} fontSize="7" fill="#a3a3a3">
-        4 signals
+        3 signals
       </text>
     </svg>
   );
@@ -739,74 +876,109 @@ function FusionDiagram() {
 function MemoryDiagram() {
   const chips = [
     { ts: "−3 d", note: "4× dismissed · bar crowd" },
-    { ts: "−7 d", note: "11 PM cluster · 16th & Valencia" },
-    { ts: "−12 d", note: "false pose: 0.71 · streetlight 14B" },
-    { ts: "−21 d", note: "confirmed assault · charged" },
+    { ts: "−7 d", note: "11 PM cluster · Valencia" },
+    { ts: "−12 d", note: "false pose 0.71 · CAM 14B" },
+    { ts: "−21 d", note: "confirmed · charged" },
+    { ts: "−34 d", note: "311 noise · same corner" },
   ];
+  // Re-trigger the chip reveal when the diagram scrolls into view so the
+  // animation lands when the operator is actually looking at it.
+  const [svgRef, inView] = useInView<SVGSVGElement>({ threshold: 0.35 });
   return (
-    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Memory diagram">
+    <svg
+      ref={svgRef}
+      viewBox="0 0 520 340"
+      className="w-full"
+      role="img"
+      aria-label="Memory diagram"
+    >
       <ArrowDef id="arr-memory" />
-      <ZoneFrame x={4} y={4} w={144} h={272} step="01" label="review" />
-      <ZoneFrame x={160} y={4} w={172} h={272} step="02" label="gbrain" />
-      <ZoneFrame x={344} y={4} w={132} h={272} step="03" label="recall" />
+      <ZoneFrame x={4} y={4} w={156} h={332} step="01" label="review" openRight />
+      <ZoneFrame x={172} y={4} w={192} h={332} step="02" label="gbrain" openLeft openRight />
+      <ZoneFrame x={376} y={4} w={140} h={332} step="03" label="recall" openLeft />
 
-      <rect x={20} y={64} width={114} height={86} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={28} y={80} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+      {/* Review zone — bigger incident card. */}
+      <rect x={20} y={56} width={124} height={240} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={28} y={72} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
         INCIDENT · #1241
       </text>
-      <text x={28} y={100} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+      <text x={28} y={96} fontFamily={PX_MONO} fontSize="12" fill={DIAGRAM_STROKE}>
         dispatcher
       </text>
-      <text x={28} y={114} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+      <text x={28} y={114} fontFamily={PX_MONO} fontSize="12" fill={DIAGRAM_STROKE}>
         held
       </text>
-      <text x={28} y={134} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        reason: bar crowd
+      <line x1={28} y1={128} x2={136} y2={128} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
+      <text x={28} y={146} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        reason
       </text>
-      <text x={28} y={146} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+      <text x={28} y={160} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        bar crowd
+      </text>
+      <text x={28} y={184} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        outcome
+      </text>
+      <text x={28} y={198} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
         no patrol sent
       </text>
+      <text x={28} y={222} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        reviewer
+      </text>
+      <text x={28} y={236} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        Off. Reyes
+      </text>
+      <text x={28} y={272} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        22:50 · 2026-05-15
+      </text>
 
-      <path
-        d="M134,108 L162,108"
-        stroke={DIAGRAM_STROKE}
-        markerEnd="url(#arr-memory)"
-      />
-      <text x={148} y={102} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+      <path d="M146,160 L174,160" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
+      <text x={160} y={154} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
         write
       </text>
 
-      <rect x={176} y={36} width={144} height={208} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={184} y={52} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+      {/* GBrain zone — taller box, 5 chips. */}
+      <rect x={184} y={36} width={168} height={288} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={192} y={54} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED} letterSpacing="1.2">
         GBRAIN · mission/16th
       </text>
-      <line x1={176} y1={58} x2={320} y2={58} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
+      <line x1={184} y1={62} x2={352} y2={62} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
       {chips.map((c, i) => {
-        const y = 70 + i * 38;
+        const y = 76 + i * 46;
         const isNew = i === 0;
+        const initialState = { opacity: 0, transform: "translateY(6px)" };
+        const liveState = {
+          opacity: 1,
+          transform: "translateY(0)",
+          transition: `opacity 480ms ease-out ${i * 180}ms, transform 480ms ease-out ${i * 180}ms`,
+        };
         return (
-          <g key={c.ts}>
+          <g
+            key={c.ts}
+            className="wd-memory-chip"
+            style={{ cursor: "pointer", ...(inView ? liveState : initialState) }}
+          >
             <rect
-              x={184}
+              className="wd-memory-chip-bg"
+              x={192}
               y={y}
-              width={128}
-              height={28}
+              width={152}
+              height={36}
               fill={isNew ? DIAGRAM_STROKE : "white"}
               stroke={DIAGRAM_STROKE}
             />
             <text
-              x={190}
-              y={y + 11}
+              x={200}
+              y={y + 13}
               fontFamily={PX_MONO}
-              fontSize="7"
+              fontSize="8"
               fill={isNew ? "#a3a3a3" : DIAGRAM_MUTED}
               letterSpacing="1.2"
             >
               {c.ts}
             </text>
             <text
-              x={190}
-              y={y + 22}
+              x={200}
+              y={y + 27}
               fontFamily={PX_MONO}
               fontSize="8"
               fill={isNew ? "white" : DIAGRAM_STROKE}
@@ -817,146 +989,337 @@ function MemoryDiagram() {
         );
       })}
 
-      <path
-        d="M320,140 L362,140"
-        stroke={DIAGRAM_STROKE}
-        markerEnd="url(#arr-memory)"
-      />
-      <text x={341} y={134} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
+      <path d="M352,170 L378,170" stroke={DIAGRAM_STROKE} markerEnd="url(#arr-memory)" />
+      <text x={365} y={164} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
         recall
       </text>
 
-      <rect x={362} y={84} width={108} height={106} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={370} y={100} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+      {/* Recall zone — bigger next-signal card. */}
+      <rect x={394} y={64} width={114} height={224} fill="white" stroke={DIAGRAM_STROKE} />
+      <text x={402} y={82} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
         NEXT SIGNAL
       </text>
-      <text x={370} y={120} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+      <text x={402} y={108} fontFamily={PX_MONO} fontSize="13" fill={DIAGRAM_STROKE}>
         CAM 14B
       </text>
-      <text x={370} y={134} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
+      <text x={402} y={124} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
         Mission &amp; 16th
       </text>
-      <rect x={370} y={146} width={92} height={14} fill={DIAGRAM_STROKE} />
-      <text x={376} y={156} fontFamily={PX_MONO} fontSize="7" fill="white">
-        + 4 prior matches
+      <line x1={402} y1={140} x2={500} y2={140} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
+      <rect x={402} y={154} width={100} height={20} fill={DIAGRAM_STROKE} />
+      <text x={410} y={167} fontFamily={PX_MONO} fontSize="9" fill="white">
+        + 5 prior matches
       </text>
-      <text x={370} y={176} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
-        score ↓ false-positive
+      <text x={402} y={194} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        score
+      </text>
+      <text x={402} y={210} fontFamily={PX_MONO} fontSize="11" fill={DIAGRAM_STROKE}>
+        ↓ false-positive
+      </text>
+      <text x={402} y={234} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_MUTED}>
+        pattern
+      </text>
+      <text x={402} y={250} fontFamily={PX_MONO} fontSize="10" fill={DIAGRAM_STROKE}>
+        bar closing
+      </text>
+      <text x={402} y={274} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
+        → soft-rank
       </text>
     </svg>
   );
 }
 
-function ConsentDiagram() {
-  const checks: { rule: string; status: "ok" | "fail" }[] = [
-    { rule: "GEOFENCE", status: "ok" },
-    { rule: "TIME WINDOW", status: "ok" },
-    { rule: "INCIDENT TYPE", status: "ok" },
-    { rule: "WARRANT", status: "fail" },
-  ];
+
+type DecisionState = "pending" | "approved" | "reassigned" | "rejected";
+
+function DecisionDiagram() {
+  const [predicted, setPredicted] = useState<DecisionState>("pending");
+  const [live, setLive] = useState<DecisionState>("pending");
+  // `auto` tracks whether the most recent state change came from the
+  // countdown auto-firing (true) vs a user click (false). Used to decide
+  // whether to loop the demo or hold the state.
+  const [predictedAuto, setPredictedAuto] = useState(false);
+  const [liveAuto, setLiveAuto] = useState(false);
+  const [wrapRef, inView] = useInView<HTMLDivElement>({ threshold: 0.3 });
+
+  // Loop the demo: 4s after an auto-fire, snap back to pending so the
+  // countdown restarts. User clicks don't loop — they hold until reset.
+  useEffect(() => {
+    if (predicted !== "approved" || !predictedAuto) return;
+    const id = setTimeout(() => {
+      setPredicted("pending");
+      setPredictedAuto(false);
+    }, 4000);
+    return () => clearTimeout(id);
+  }, [predicted, predictedAuto]);
+  useEffect(() => {
+    if (live !== "approved" || !liveAuto) return;
+    const id = setTimeout(() => {
+      setLive("pending");
+      setLiveAuto(false);
+    }, 4000);
+    return () => clearTimeout(id);
+  }, [live, liveAuto]);
+  const cardStyle = (i: number) =>
+    inView
+      ? {
+          opacity: 1,
+          transform: "translateY(0)",
+          transition: `opacity 520ms ease-out ${i * 220}ms, transform 520ms ease-out ${i * 220}ms`,
+        }
+      : { opacity: 0, transform: "translateY(12px)" };
   return (
-    <svg viewBox="0 0 480 280" className="w-full" role="img" aria-label="Consent diagram">
-      <ArrowDef id="arr-consent" />
-      <ArrowDef id="arr-consent-fail" color={DIAGRAM_ACCENT} />
-      <ZoneFrame x={4} y={4} w={120} h={272} step="01" label="query" />
-      <ZoneFrame x={136} y={4} w={188} h={272} step="02" label="policy-as-code" />
-      <ZoneFrame x={336} y={4} w={140} h={272} step="03" label="audit log" />
+    <div
+      ref={wrapRef}
+      className="flex flex-col gap-3"
+      role="group"
+      aria-label="Decision diagram"
+    >
+      <div style={cardStyle(0)}>
+        <DecisionCard
+          kind="predicted"
+          priority="A"
+          title="245 ADW · Mission corridor"
+          sub="GBrain: A + B in same neighborhood, 4 calls in 7m · conf 0.78"
+          officer="Off. Reyes 4B21 · Co. B"
+          countdown={30}
+          state={predicted}
+          countdownAnimated={inView}
+          onApprove={(auto) => {
+            setPredicted("approved");
+            setPredictedAuto(auto);
+          }}
+          onReassign={() => {
+            setPredicted("reassigned");
+            setPredictedAuto(false);
+          }}
+          onReject={() => {
+            setPredicted("rejected");
+            setPredictedAuto(false);
+          }}
+          onReset={() => {
+            setPredicted("pending");
+            setPredictedAuto(false);
+          }}
+        />
+      </div>
+      <div style={cardStyle(1)}>
+        <DecisionCard
+          kind="live"
+          priority="B"
+          title="594 Vandalism · Eddy & Leavenworth"
+          sub="SFPD Co. D (Tenderloin) · TG 816 · call #261342053"
+          officer="Off. Patel 4D05 · Co. D"
+          countdown={20}
+          state={live}
+          countdownAnimated={inView}
+          onApprove={(auto) => {
+            setLive("approved");
+            setLiveAuto(auto);
+          }}
+          onReassign={() => {
+            setLive("reassigned");
+            setLiveAuto(false);
+          }}
+          onReject={() => {
+            setLive("rejected");
+            setLiveAuto(false);
+          }}
+          onReset={() => {
+            setLive("pending");
+            setLiveAuto(false);
+          }}
+        />
+      </div>
+      <p
+        className="font-mono text-[9px] uppercase tracking-widest text-neutral-400"
+        style={cardStyle(2)}
+      >
+        Click any button to preview · click the status badge to reset
+      </p>
+    </div>
+  );
+}
 
-      <rect x={16} y={84} width={96} height={104} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={24} y={100} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
-        POLICE · SFPD
-      </text>
-      <text x={24} y={120} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
-        clip request
-      </text>
-      <text x={24} y={138} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        22:50–22:55
-      </text>
-      <text x={24} y={150} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        cam 14B
-      </text>
-      <text x={24} y={162} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        type: assault
-      </text>
-      <text x={24} y={178} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED}>
-        warrant: no
-      </text>
+function DecisionCard({
+  kind,
+  priority,
+  title,
+  sub,
+  officer,
+  countdown,
+  state,
+  countdownAnimated,
+  onApprove,
+  onReassign,
+  onReject,
+  onReset,
+}: {
+  kind: "predicted" | "live";
+  priority: string;
+  title: string;
+  sub: string;
+  officer: string;
+  countdown: number;
+  state: DecisionState;
+  countdownAnimated?: boolean;
+  onApprove: (auto: boolean) => void;
+  onReassign: () => void;
+  onReject: () => void;
+  onReset: () => void;
+}) {
+  const isPredicted = kind === "predicted";
+  const isDone = state !== "pending";
+  const initialCountdown = countdown;
 
-      <path
-        d="M112,136 L150,136"
-        stroke={DIAGRAM_STROKE}
-        markerEnd="url(#arr-consent)"
-      />
+  // Live countdown — starts decrementing once the section enters view
+  // (countdownAnimated flips true), stops if the card is reset or the
+  // operator actuates it. At zero, auto-approve fires (the simulated
+  // dispatcher hand-off).
+  const [remaining, setRemaining] = useState(initialCountdown);
+  useEffect(() => {
+    if (state !== "pending") return;
+    setRemaining(initialCountdown);
+  }, [state, initialCountdown]);
+  useEffect(() => {
+    if (state !== "pending" || !countdownAnimated) return;
+    const id = setInterval(() => {
+      setRemaining((r) => {
+        if (r <= 1) {
+          clearInterval(id);
+          // Defer the parent setState by a tick so we don't update a
+          // parent state from inside our own state updater. Pass auto=true
+          // so the parent knows this was a countdown fire vs a button click.
+          setTimeout(() => onApprove(true), 0);
+          return 0;
+        }
+        return r - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [state, countdownAnimated, onApprove]);
 
-      <rect x={150} y={64} width={160} height={144} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={160} y={80} fontFamily={PX_MONO} fontSize="8" fill={DIAGRAM_MUTED} letterSpacing="1.2">
-        OWNER POLICY · CAM 14B
-      </text>
-      <line x1={150} y1={86} x2={310} y2={86} stroke={DIAGRAM_MUTED} strokeDasharray="2 2" />
-      {checks.map((c, i) => {
-        const y = 94 + i * 22;
-        const isFail = c.status === "fail";
-        return (
-          <g key={c.rule}>
-            <text x={160} y={y + 10} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
-              {c.rule}
-            </text>
-            <rect
-              x={278}
-              y={y}
-              width={22}
-              height={14}
-              fill={isFail ? DIAGRAM_ACCENT : "white"}
-              stroke={isFail ? DIAGRAM_ACCENT : DIAGRAM_STROKE}
+  const pctLeft = Math.max(0, Math.min(1, remaining / initialCountdown));
+  return (
+    <article
+      className={[
+        "group relative overflow-hidden border bg-white transition-all duration-200",
+        isPredicted
+          ? "border-l-[3px] border-l-black border-y-neutral-200 border-r-neutral-200"
+          : "border-neutral-300",
+        state === "approved" && "bg-black text-white",
+        state === "rejected" && "bg-neutral-50 opacity-70",
+        state === "reassigned" && "bg-neutral-50",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <header className="flex items-center justify-between gap-2 border-b border-neutral-200/60 px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          <span
+            className={
+              isPredicted
+                ? "border border-black bg-black px-1 py-px font-mono text-[8px] uppercase tracking-widest text-white"
+                : "border border-neutral-500 bg-white px-1 py-px font-mono text-[8px] uppercase tracking-widest text-neutral-600"
+            }
+          >
+            {isPredicted ? "PRED" : "LIVE"}
+          </span>
+          <span className="border border-black bg-white px-1 py-px font-mono text-[8px] font-bold uppercase tracking-widest text-black">
+            P{priority}
+          </span>
+          <span className="truncate font-mono text-[11px] uppercase tracking-widest">
+            {title}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onReset}
+          aria-label="Reset decision"
+          className={[
+            "shrink-0 border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-widest transition-colors",
+            state === "approved"
+              ? "border-white text-white hover:bg-white hover:text-black"
+              : state === "rejected"
+                ? "border-neutral-400 text-neutral-500 hover:border-black hover:text-black"
+                : state === "reassigned"
+                  ? "border-neutral-500 text-neutral-700 hover:border-black hover:text-black"
+                  : "border-neutral-200 text-neutral-400 hover:border-black hover:text-black",
+          ].join(" ")}
+        >
+          {state === "approved" && "Approved ✓"}
+          {state === "rejected" && "Rejected ✗"}
+          {state === "reassigned" && "Reassigned ↺"}
+          {state === "pending" && "Pending"}
+        </button>
+      </header>
+      <div className="px-3 py-2">
+        <p className={`font-mono text-[10px] leading-snug ${state === "approved" ? "text-white/80" : "text-neutral-500"}`}>
+          {sub}
+        </p>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <span className={`truncate font-mono text-[10px] ${state === "approved" ? "text-white" : "text-black"}`}>
+            {officer}
+          </span>
+          {!isDone && (
+            <span className="shrink-0 font-mono tabular-nums text-[9px] uppercase tracking-widest text-neutral-500">
+              Auto in {remaining}s
+            </span>
+          )}
+        </div>
+        {!isDone && (
+          <div className="mt-1.5 h-[2px] w-full bg-neutral-100">
+            <div
+              className="h-full bg-black"
+              style={{
+                width: `${pctLeft * 100}%`,
+                transition: "width 900ms linear",
+              }}
             />
-            <text
-              x={289}
-              y={y + 10}
-              textAnchor="middle"
-              fontFamily={PX_MONO}
-              fontSize="9"
-              fill={isFail ? "white" : DIAGRAM_STROKE}
-            >
-              {isFail ? "✗" : "✓"}
-            </text>
-          </g>
-        );
-      })}
-
-      <path
-        d="M310,136 C 322,136 322,76 348,76"
-        fill="none"
-        stroke={DIAGRAM_STROKE}
-        strokeDasharray="2 2"
-        markerEnd="url(#arr-consent)"
-      />
-      <path
-        d="M310,136 C 322,136 322,196 348,196"
-        fill="none"
-        stroke={DIAGRAM_ACCENT}
-        markerEnd="url(#arr-consent-fail)"
-      />
-
-      <rect x={348} y={60} width={120} height={32} fill="white" stroke={DIAGRAM_STROKE} />
-      <text x={356} y={76} fontFamily={PX_MONO} fontSize="9" fill={DIAGRAM_STROKE}>
-        22:50:31 ALLOW
-      </text>
-      <text x={356} y={86} fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED}>
-        clip · 5 s · cam 14B
-      </text>
-
-      <rect x={348} y={180} width={120} height={32} fill={DIAGRAM_ACCENT} />
-      <text x={356} y={196} fontFamily={PX_MONO} fontSize="9" fill="white">
-        22:50:31 DENY
-      </text>
-      <text x={356} y={206} fontFamily={PX_MONO} fontSize="7" fill="white">
-        warrant required
-      </text>
-
-      <text x={408} y={240} textAnchor="middle" fontFamily={PX_MONO} fontSize="7" fill={DIAGRAM_MUTED} letterSpacing="1.2">
-        OWNER SEES BOTH
-      </text>
-    </svg>
+          </div>
+        )}
+      </div>
+      {!isDone && (
+        <div className="flex items-center border-t border-neutral-100">
+          <button
+            type="button"
+            onClick={onReject}
+            className="flex-1 border-r border-neutral-100 py-1.5 font-mono text-[10px] uppercase tracking-widest text-neutral-500 transition-all duration-150 hover:bg-neutral-50 hover:text-black hover:tracking-[0.2em]"
+          >
+            Reject
+          </button>
+          <button
+            type="button"
+            onClick={onReassign}
+            className="flex-1 border-r border-neutral-100 py-1.5 font-mono text-[10px] uppercase tracking-widest text-neutral-500 transition-all duration-150 hover:bg-neutral-50 hover:text-black hover:tracking-[0.2em]"
+          >
+            Reassign
+          </button>
+          <button
+            type="button"
+            onClick={() => onApprove(false)}
+            className="flex-1 bg-black py-1.5 font-mono text-[10px] uppercase tracking-widest text-white transition-all duration-150 hover:bg-neutral-800 hover:tracking-[0.22em]"
+          >
+            Approve
+          </button>
+        </div>
+      )}
+      {isDone && (
+        <div
+          className={`px-3 py-2 font-mono text-[10px] uppercase tracking-widest ${
+            state === "approved"
+              ? "bg-black text-white"
+              : state === "rejected"
+                ? "bg-neutral-100 text-neutral-500"
+                : "bg-neutral-100 text-neutral-700"
+          }`}
+        >
+          {state === "approved" && `Dispatched · ${officer.split(" · ")[0]}`}
+          {state === "rejected" && "Cancelled · written to memory"}
+          {state === "reassigned" && "Reassignment in flight · countdown reset"}
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -1138,8 +1501,8 @@ function Footer() {
   return (
     <footer className="px-6 py-6">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-        <span>WatchDog · GStack × GBrain hackathon · 2026</span>
-        <span>SFPD demo build · No real footage stored</span>
+        <span>WatchDog · GStack × GBrain · 2026</span>
+        <span>Live SF data · No persistent video retention</span>
       </div>
     </footer>
   );

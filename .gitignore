@@ -11,11 +11,11 @@ coverage
 *.tsbuildinfo
 .gstack/
 
-# Hour-0 probe artifact — TS pipeline uses transformers.js, not Python weights
+# TS pipeline uses transformers.js — no Python weights checked in
 yolov8n.pt
 .env*.local
 
-# Editor backups of env files (nano .save, etc.) — never commit secrets
+# Editor backups of env files
 *.save
 .env*.save
 .env.*.local

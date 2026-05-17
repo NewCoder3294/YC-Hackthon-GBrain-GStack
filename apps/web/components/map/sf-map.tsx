@@ -8,16 +8,18 @@ import { CameraTile } from "@/components/cameras/camera-tile";
 import { IncidentPanel } from "./incident-panel";
 import { DispatchPanel } from "./dispatch-panel";
 import { EventFeed } from "./event-feed";
+import { NewsPanel, type NewsIncidentRow } from "./news-panel";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
 import { isHighPriority, type DispatchCall } from "@/lib/dispatch";
-import { useDispatchSimulation } from "@/hooks/use-dispatch-simulation";
+import { useDispatchFeed } from "@/hooks/use-dispatch-feed";
 import { cn } from "@/lib/utils";
 
 type CamWithCoords = CameraTileData & { lat: number; lng: number };
 
 interface Props {
   cameras: CamWithCoords[];
+  newsIncidents?: NewsIncidentRow[];
 }
 
 const SF_CENTER: [number, number] = [-122.4194, 37.7749];
@@ -91,12 +93,13 @@ function buildPopupEl(title: string, sub: string): HTMLDivElement {
   return root;
 }
 
-export function SFMap({ cameras }: Props) {
+export function SFMap({ cameras, newsIncidents = [] }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MlMap | null>(null);
   const incidentMarkersRef = useRef<maplibregl.Marker[]>([]);
   const signalMarkersRef = useRef<maplibregl.Marker[]>([]);
   const dispatchMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const newsMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
 
   const [stream, setStream] = useState<StreamFilter>("hls");
@@ -104,12 +107,14 @@ export function SFMap({ cameras }: Props) {
   const [showIncidents, setShowIncidents] = useState(true);
   const [showSignals, setShowSignals] = useState(true);
   const [showDispatch, setShowDispatch] = useState(true);
+  const [showNews, setShowNews] = useState(true);
   const [dispatchPriority, setDispatchPriority] = useState<DispatchPriority>("all");
   const [selectedCam, setSelectedCam] = useState<CamWithCoords | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<WdIncident | null>(null);
   const [selectedDispatch, setSelectedDispatch] = useState<DispatchCall | null>(null);
+  const [selectedNews, setSelectedNews] = useState<NewsIncidentRow | null>(null);
 
-  const dispatch = useDispatchSimulation();
+  const dispatch = useDispatchFeed();
   const eventStream = useEventStream(dispatch.calls);
 
   const locateOnMap = useCallback((lat: number, lng: number) => {
@@ -302,9 +307,11 @@ export function SFMap({ cameras }: Props) {
       incidentMarkersRef.current.forEach((m) => m.remove());
       signalMarkersRef.current.forEach((m) => m.remove());
       dispatchMarkersRef.current.forEach((m) => m.remove());
+      newsMarkersRef.current.forEach((m) => m.remove());
       incidentMarkersRef.current = [];
       signalMarkersRef.current = [];
       dispatchMarkersRef.current.clear();
+      newsMarkersRef.current.clear();
       map.remove();
       mapRef.current = null;
     };
@@ -395,6 +402,53 @@ export function SFMap({ cameras }: Props) {
     }
   }, [showDispatch]);
 
+  // News markers — geo-tagged historical news coverage of SF violent crime.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    const store = newsMarkersRef.current;
+    const nextIds = new Set(newsIncidents.map((n) => n.id));
+
+    for (const [id, marker] of store) {
+      if (!nextIds.has(id)) {
+        marker.remove();
+        store.delete(id);
+      }
+    }
+
+    for (const news of newsIncidents) {
+      if (store.has(news.id)) continue;
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "wd-news-marker";
+      el.dataset.severity = news.severity;
+      el.dataset.type = news.crimeType;
+      el.setAttribute("aria-label", `${news.crimeType} — ${news.title}`);
+      el.title = `${news.crimeType.toUpperCase()} · ${news.neighborhood ?? ""} · ${news.title}`;
+      const inner = document.createElement("span");
+      inner.className = "wd-news-marker-inner";
+      el.appendChild(inner);
+      el.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        setSelectedNews(news);
+        setSelectedCam(null);
+        setSelectedIncident(null);
+        setSelectedDispatch(null);
+        map.easeTo({ center: [news.lng, news.lat], zoom: 14.5 });
+      });
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat([news.lng, news.lat])
+        .addTo(map);
+      store.set(news.id, marker);
+    }
+  }, [newsIncidents, mapLoaded]);
+
+  useEffect(() => {
+    for (const [, m] of newsMarkersRef.current) {
+      m.getElement().style.display = showNews ? "" : "none";
+    }
+  }, [showNews]);
+
   return (
     <div className="relative w-full" style={{ height: "calc(100vh - 3rem)", minHeight: 480 }}>
       <div
@@ -420,6 +474,7 @@ export function SFMap({ cameras }: Props) {
           on={showDispatch}
           onClick={() => setShowDispatch((v) => !v)}
         />
+        <LayerToggle label="News" on={showNews} onClick={() => setShowNews((v) => !v)} />
         <div className="flex">
           {(["all", "high", "routine"] as DispatchPriority[]).map((opt, i) => (
             <button
@@ -467,7 +522,7 @@ export function SFMap({ cameras }: Props) {
         <button
           type="button"
           onClick={() => dispatch.setPaused(!dispatch.paused)}
-          title={dispatch.paused ? "Resume simulation" : "Pause simulation"}
+          title={dispatch.paused ? "Resume feed" : "Pause feed"}
           className={cn(
             "h-7 border px-2 font-mono text-[10px] uppercase tracking-widest",
             dispatch.paused
@@ -475,11 +530,12 @@ export function SFMap({ cameras }: Props) {
               : "border-black bg-black text-white",
           )}
         >
-          {dispatch.paused ? "Sim paused" : "Sim live"}
+          {dispatch.paused ? "Feed paused" : "Feed live"}
         </button>
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           {filteredCams.length} cams · {wdIncidents.length} incidents ·{" "}
-          {filteredDispatch.length}/{dispatch.calls.length} dispatch
+          {filteredDispatch.length}/{dispatch.calls.length} dispatch ·{" "}
+          {newsIncidents.length} news
           {dispatch.loading ? " (loading)" : ""}
           {dispatch.error ? ` · ${dispatch.error}` : ""}
         </span>
@@ -511,6 +567,12 @@ export function SFMap({ cameras }: Props) {
             </span>
           }
           label="Dispatch (SFGov · 2h)"
+        />
+        <LegendRow
+          swatch={
+            <span className="block h-2.5 w-2.5 rotate-45 border border-black bg-white" />
+          }
+          label="News (historical)"
         />
       </div>
 
@@ -550,6 +612,13 @@ export function SFMap({ cameras }: Props) {
           key={selectedDispatch.id}
           call={selectedDispatch}
           onClose={() => setSelectedDispatch(null)}
+        />
+      )}
+      {selectedNews && (
+        <NewsPanel
+          key={selectedNews.id}
+          incident={selectedNews}
+          onClose={() => setSelectedNews(null)}
         />
       )}
 
@@ -707,6 +776,42 @@ export function SFMap({ cameras }: Props) {
         }
         .wd-popup .maplibregl-popup-tip {
           display: none;
+        }
+        /* News markers — diamond outline, distinct from other layers. */
+        .wd-news-marker {
+          display: block;
+          padding: 0;
+          margin: 0;
+          border: 0;
+          background: transparent;
+          cursor: pointer;
+          line-height: 0;
+          width: 16px;
+          height: 16px;
+        }
+        .wd-news-marker-inner {
+          display: block;
+          width: 10px;
+          height: 10px;
+          margin: 3px;
+          transform: rotate(45deg);
+          background: #fff;
+          border: 1.5px solid #000;
+          transition: transform 120ms ease, background 120ms ease;
+          will-change: transform;
+        }
+        .wd-news-marker[data-severity="high"] .wd-news-marker-inner {
+          background: #000;
+        }
+        .wd-news-marker[data-severity="med"] .wd-news-marker-inner {
+          background: #fff;
+        }
+        .wd-news-marker[data-severity="low"] .wd-news-marker-inner {
+          background: #fff;
+          border-color: #737373;
+        }
+        .wd-news-marker:hover .wd-news-marker-inner {
+          transform: rotate(45deg) scale(1.25);
         }
       `}</style>
     </div>

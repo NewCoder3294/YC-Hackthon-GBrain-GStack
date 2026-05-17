@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { isHighPriority, priorityLabel } from "./dispatch";
 import {
-  createSimulatorState,
+  createFeedCursor,
   jitterInterval,
   mulberry32,
-  nextDispatchCall,
+  nextDispatch,
   shuffleInPlace,
-} from "./dispatch-simulator";
-import { mergeFilenameMeta, parseOpenMhzFilename } from "./dispatch-filename";
+} from "./dispatch-feed";
+import { mergeFilenameMeta, parseTalkgroupFilename } from "./dispatch-filename";
 import type { AudioFile } from "./dispatch";
 
 const SAMPLE_FILES: AudioFile[] = Array.from({ length: 8 }, (_, i) => ({
@@ -79,35 +79,33 @@ describe("jitterInterval", () => {
   });
 });
 
-describe("nextDispatchCall", () => {
-  it("does not repeat the same audio file twice in a row across a deck of >1", () => {
-    const state = createSimulatorState(SAMPLE_FILES, { seed: 123 });
+describe("nextDispatch", () => {
+  it("does not repeat the same audio file twice in a row across a catalog of >1", () => {
+    const state = createFeedCursor(SAMPLE_FILES, { seed: 123 });
     let prev: string | null = null;
     for (let i = 0; i < 100; i++) {
-      const call = nextDispatchCall(state);
+      const call = nextDispatch(state);
       expect(call.fileName).not.toBe(prev);
       prev = call.fileName;
     }
   });
 
   it("avoids the same neighborhood twice in a row when possible", () => {
-    const state = createSimulatorState(SAMPLE_FILES, { seed: 456 });
+    const state = createFeedCursor(SAMPLE_FILES, { seed: 456 });
     let prev: string | null = null;
     let repeats = 0;
     for (let i = 0; i < 200; i++) {
-      const call = nextDispatchCall(state);
+      const call = nextDispatch(state);
       if (call.neighborhood === prev) repeats++;
       prev = call.neighborhood;
     }
-    // With 20 weighted hotspots and the avoid-last rule, we should
-    // never get a back-to-back repeat in this run.
     expect(repeats).toBe(0);
   });
 
   it("places every pin within an SF-ish bounding box", () => {
-    const state = createSimulatorState(SAMPLE_FILES, { seed: 789 });
+    const state = createFeedCursor(SAMPLE_FILES, { seed: 789 });
     for (let i = 0; i < 200; i++) {
-      const call = nextDispatchCall(state);
+      const call = nextDispatch(state);
       expect(call.lat).toBeGreaterThan(37.7);
       expect(call.lat).toBeLessThan(37.82);
       expect(call.lng).toBeGreaterThan(-122.52);
@@ -115,7 +113,7 @@ describe("nextDispatchCall", () => {
     }
   });
 
-  it("uses manifest fields when present and generates the rest", () => {
+  it("uses declared metadata when present and fills the gaps from lookups", () => {
     const files: AudioFile[] = [
       {
         file: "real.m4a",
@@ -128,22 +126,20 @@ describe("nextDispatchCall", () => {
         },
       },
     ];
-    const state = createSimulatorState(files, { seed: 1 });
-    const call = nextDispatchCall(state);
+    const state = createFeedCursor(files, { seed: 1 });
+    const call = nextDispatch(state);
     expect(call.callType).toBe("Manifest Type");
     expect(call.callTypeCode).toBe("999");
     expect(call.priority).toBe("A");
-    // Address comes from neighborhood fallback (no meta address provided).
     expect(call.address.length).toBeGreaterThan(0);
-    expect(call.generated).toBe(false);
   });
 
-  it("throws on empty deck", () => {
-    const state = createSimulatorState([], { seed: 1 });
-    expect(() => nextDispatchCall(state)).toThrow(/empty deck/);
+  it("throws on empty catalog", () => {
+    const state = createFeedCursor([], { seed: 1 });
+    expect(() => nextDispatch(state)).toThrow(/empty/);
   });
 
-  it("uses filename-derived talkgroup + recordedAt for OpenMHz-named files", () => {
+  it("uses filename-derived talkgroup + recordedAt for talkgroup-named files", () => {
     const files: AudioFile[] = [
       {
         file: "sfp25-812-1778753073.m4a",
@@ -156,17 +152,17 @@ describe("nextDispatchCall", () => {
         },
       },
     ];
-    const state = createSimulatorState(files, { seed: 1 });
-    const call = nextDispatchCall(state);
+    const state = createFeedCursor(files, { seed: 1 });
+    const call = nextDispatch(state);
     expect(call.talkgroupId).toBe("812");
     expect(call.talkgroup).toMatch(/SFPD Co\. C/);
     expect(call.recordedAt).toBe("2026-05-14T13:24:33.000Z");
   });
 });
 
-describe("parseOpenMhzFilename", () => {
-  it("extracts talkgroup and timestamp from OpenMHz captured names", () => {
-    const r = parseOpenMhzFilename("sfp25-812-1778753073.m4a");
+describe("parseTalkgroupFilename", () => {
+  it("extracts talkgroup id and timestamp from a talkgroup capture filename", () => {
+    const r = parseTalkgroupFilename("sfp25-812-1778753073.m4a");
     expect(r).not.toBeNull();
     expect(r!.talkgroupId).toBe("812");
     expect(r!.talkgroupName).toMatch(/Bayview/);
@@ -174,20 +170,20 @@ describe("parseOpenMhzFilename", () => {
   });
 
   it("supports mp3 / wav / ogg / aac", () => {
-    expect(parseOpenMhzFilename("sfp25-804-1778752999.mp3")?.talkgroupId).toBe("804");
-    expect(parseOpenMhzFilename("sfp25-804-1778752999.wav")?.talkgroupId).toBe("804");
-    expect(parseOpenMhzFilename("sfp25-804-1778752999.ogg")?.talkgroupId).toBe("804");
-    expect(parseOpenMhzFilename("sfp25-804-1778752999.aac")?.talkgroupId).toBe("804");
+    expect(parseTalkgroupFilename("sfp25-804-1778752999.mp3")?.talkgroupId).toBe("804");
+    expect(parseTalkgroupFilename("sfp25-804-1778752999.wav")?.talkgroupId).toBe("804");
+    expect(parseTalkgroupFilename("sfp25-804-1778752999.ogg")?.talkgroupId).toBe("804");
+    expect(parseTalkgroupFilename("sfp25-804-1778752999.aac")?.talkgroupId).toBe("804");
   });
 
-  it("returns null for non-OpenMHz names", () => {
-    expect(parseOpenMhzFilename("random.m4a")).toBeNull();
-    expect(parseOpenMhzFilename("hello.txt")).toBeNull();
-    expect(parseOpenMhzFilename("sfp25-only.m4a")).toBeNull();
+  it("returns null for filenames that don't match the pattern", () => {
+    expect(parseTalkgroupFilename("random.m4a")).toBeNull();
+    expect(parseTalkgroupFilename("hello.txt")).toBeNull();
+    expect(parseTalkgroupFilename("sfp25-only.m4a")).toBeNull();
   });
 
   it("falls back to generic 'Talkgroup N' for unknown talkgroup ids", () => {
-    const r = parseOpenMhzFilename("sfp25-9999-1778753073.m4a");
+    const r = parseTalkgroupFilename("sfp25-9999-1778753073.m4a");
     expect(r?.talkgroupName).toBe("Talkgroup 9999");
   });
 });

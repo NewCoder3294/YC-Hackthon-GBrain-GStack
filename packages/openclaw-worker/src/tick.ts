@@ -14,6 +14,9 @@ import {
   severityFor,
 } from "./fusion";
 import { putPatternPage, putIntelNotePage } from "./gbrain";
+import { rankAndFilter, type RankedCluster } from "./funnel";
+import { enrichCluster, regionHint, type EnrichedIncident } from "./enrich";
+import { callBudget } from "./budget";
 
 /**
  * One pass of "look for something worth ingesting, post it." Used by:
@@ -36,6 +39,8 @@ export interface TickResult {
   mode: "scripted" | "fusion" | "both";
   scripted_fired: number;
   clusters_seen: number;
+  clusters_qualified: number;
+  enriched: number;
   incidents_posted: number;
   pattern_pages_written: number;
   intel_pages_written: number;
@@ -65,6 +70,8 @@ export async function runTick(): Promise<TickResult> {
     mode: cfg.WORKER_MODE,
     scripted_fired: 0,
     clusters_seen: 0,
+    clusters_qualified: 0,
+    enriched: 0,
     incidents_posted: 0,
     pattern_pages_written: 0,
     intel_pages_written: 0,
@@ -77,10 +84,40 @@ export async function runTick(): Promise<TickResult> {
   if (cfg.WORKER_MODE === "fusion" || cfg.WORKER_MODE === "both") {
     const clusters = await fuseRecent();
     result.clusters_seen = clusters.length;
-    for (const cluster of clusters) {
+
+    // Funnel: deterministic priority filter BEFORE any LLM call.
+    const ranked = rankAndFilter(clusters);
+    result.clusters_qualified = ranked.length;
+    log.info({
+      scope: "tick.funnel",
+      msg: "ranked clusters",
+      extra: {
+        seen: clusters.length,
+        qualified: ranked.length,
+        budget: callBudget.snapshot(),
+      },
+    });
+
+    let llmCallsThisTick = 0;
+    for (const r of ranked) {
+      const { cluster } = r;
       if (!shouldEmit(`fusion:${cluster.fusionKey}`, ttlMs)) continue;
       try {
-        await emitFusionIncident(cluster, result);
+        const enriched = await enrichCluster(cluster, llmCallsThisTick);
+        if (!enriched) {
+          // No Claude analysis = no incident emitted. We'd rather skip than
+          // post a "Fused incident — N signals" stub. The cluster will
+          // get another chance on the next tick if it's still around.
+          log.info({
+            scope: "tick",
+            msg: "skipping cluster — no Claude description available",
+            extra: { fusion_key: cluster.fusionKey, priority: r.priority },
+          });
+          continue;
+        }
+        llmCallsThisTick++;
+        result.enriched++;
+        await emitFusionIncident(cluster, r, enriched, result);
       } catch (err) {
         log.error({
           scope: "tick",
@@ -160,7 +197,7 @@ async function emitScenario(scenario: Scenario, result: TickResult): Promise<voi
   result.intel_pages_written++;
 
   // Pattern page if signal mix is recurring (cam + 911 within 30s is the
-  // canonical hackathon pattern). Upsert by mix-signature so repeated detections
+  // canonical seed pattern). Upsert by mix-signature so repeated detections
   // accumulate in one row rather than spamming the KG.
   const hasCam = scenario.signals.some((s) => s.kind.startsWith("camera"));
   const has911 = scenario.signals.some((s) => s.kind === "call_911");
@@ -179,17 +216,37 @@ async function emitScenario(scenario: Scenario, result: TickResult): Promise<voi
 
 async function emitFusionIncident(
   cluster: FusionCluster,
+  ranked: RankedCluster,
+  enriched: EnrichedIncident | null,
   result: TickResult,
 ): Promise<void> {
   const cfg = getConfig();
-  const severity = severityFor(cluster);
+  // If Claude enriched the cluster, prefer its title/severity/narrative.
+  // Otherwise fall back to the deterministic rules from fusion.ts.
+  const severity = enriched?.severity ?? severityFor(cluster);
   const sourceTypeList = Object.entries(cluster.sourceTypeCounts)
     .map(([k, v]) => `${v}×${k}`)
     .join(", ");
-  const title = `Fused incident — ${cluster.members.length} signals (${sourceTypeList})`;
+
+  const baseTitle = `Fused incident — ${cluster.members.length} signals (${sourceTypeList})`;
+  const title = enriched?.title ?? baseTitle;
+
+  const llmBlock = enriched
+    ? [
+        `**${enriched.title}**`,
+        "",
+        enriched.narrative,
+        "",
+        `_decision hint:_ **${enriched.decision_hint}**  ·  _enriched by claude (${cfg.LLM_MODEL})_`,
+        "",
+      ]
+    : [];
+
   const notes = [
+    ...llmBlock,
     `OpenClaw fused ${cluster.members.length} signals within ${cfg.FUSION_WINDOW_S}s / ${cfg.FUSION_RADIUS_M}m.`,
     `Earliest ${cluster.earliestAt.toISOString()}; latest ${cluster.latestAt.toISOString()}.`,
+    `Funnel priority: ${ranked.priority} (${ranked.reasons.join(", ")})`,
     "",
     "Members:",
     ...cluster.members.map(
@@ -275,11 +332,16 @@ async function emitFusionIncident(
   if (!cfg.GBRAIN_PAGES_ENABLED) return;
   await putIntelNotePage({
     noteId: cluster.fusionKey,
-    title: `OpenClaw fusion · ${cluster.members.length} signals`,
+    title: enriched
+      ? enriched.title
+      : `${cluster.members.length} signals · ${cluster.centroidLat.toFixed(3)}, ${cluster.centroidLng.toFixed(3)}`,
     body: notes,
     tags: [
       "fusion:auto",
       `severity:${severity}`,
+      ...(enriched ? ["enriched:claude", `decision:${enriched.decision_hint}`] : []),
+      ...(enriched?.tags ?? []),
+      `region:${regionHint(cluster.centroidLat, cluster.centroidLng).replace(/\s+/g, "-")}`,
       ...Object.keys(cluster.sourceTypeCounts).map(
         (k) => `signal:${k.replace("_", "-")}`,
       ),
@@ -290,7 +352,7 @@ async function emitFusionIncident(
 }
 
 function extractRegion(scenario: Scenario): string {
-  // Cheap region inference from coordinates. Good enough for hackathon tags.
+  // Cheap region inference from coordinates.
   const { lat, lng } = scenario;
   if (lat > 37.78 && lng < -122.4 && lng > -122.42) return "tenderloin";
   if (lat > 37.76 && lat < 37.78 && lng < -122.41 && lng > -122.43) return "mission";

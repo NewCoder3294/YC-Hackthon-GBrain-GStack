@@ -208,11 +208,15 @@ export async function selectPinnedCameras(
   deps: PinDeps,
   opts: PinOptions = {},
 ): Promise<PinnedCamera[]> {
+  const forcedIds = opts.caltransIds;
+  // When the caller hands us an explicit pin list, watch ALL of them.
+  // The DEFAULT_PIN_LIMIT only applies to the auto-discovery path.
   const limit =
     opts.limit !== undefined && opts.limit > 0
       ? opts.limit
-      : DEFAULT_PIN_LIMIT;
-  const forcedIds = opts.caltransIds;
+      : forcedIds && forcedIds.length > 0
+        ? forcedIds.length
+        : DEFAULT_PIN_LIMIT;
 
   const fromDb = await selectFromDb(deps.db, forcedIds, limit);
   if (fromDb.length > 0) return fromDb;

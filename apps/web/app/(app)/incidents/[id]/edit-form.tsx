@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { deleteIncident, updateIncident } from "../actions";
@@ -15,6 +15,27 @@ interface Props {
 
 const SEVERITIES: Severity[] = ["low", "med", "high"];
 
+// Machine-generated preambles from OpenClaw worker (e.g. "OpenClaw fused 21
+// signals within 90s / 300m. Earliest …Z; latest …Z. Members: …") shouldn't
+// crowd the dispatcher's note field. Split it out into a quoted origin block
+// so the notes area is reserved for human commentary.
+function splitMachinePreamble(notes: string): {
+  preamble: string | null;
+  user: string;
+} {
+  if (!notes) return { preamble: null, user: "" };
+  const trimmed = notes.trim();
+  if (!/^OpenClaw fused/i.test(trimmed)) {
+    return { preamble: null, user: trimmed };
+  }
+  const blankIdx = trimmed.indexOf("\n\n");
+  if (blankIdx === -1) return { preamble: trimmed, user: "" };
+  return {
+    preamble: trimmed.slice(0, blankIdx).trim(),
+    user: trimmed.slice(blankIdx + 2).trim(),
+  };
+}
+
 export function EditIncidentForm({
   id,
   initialTitle,
@@ -22,8 +43,12 @@ export function EditIncidentForm({
   initialSeverity,
 }: Props) {
   const router = useRouter();
+  const { preamble, user: initialUserNotes } = useMemo(
+    () => splitMachinePreamble(initialNotes),
+    [initialNotes],
+  );
   const [title, setTitle] = useState(initialTitle);
-  const [notes, setNotes] = useState(initialNotes);
+  const [notes, setNotes] = useState(initialUserNotes);
   const [severity, setSeverity] = useState<Severity>(initialSeverity);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -31,7 +56,7 @@ export function EditIncidentForm({
 
   const dirty =
     title !== initialTitle ||
-    notes !== initialNotes ||
+    notes !== initialUserNotes ||
     severity !== initialSeverity;
 
   const onSaveRef = useRef<() => void>(() => {});
@@ -39,12 +64,17 @@ export function EditIncidentForm({
   function onSave() {
     setError(null);
     setSaved(false);
+    const composedNotes = preamble
+      ? notes.trim()
+        ? `${preamble}\n\n${notes.trim()}`
+        : preamble
+      : notes.trim() || null;
     startTransition(async () => {
       try {
         await updateIncident({
           id,
           title: title.trim(),
-          notes: notes.trim() ? notes : null,
+          notes: typeof composedNotes === "string" ? composedNotes : null,
           severity,
         });
         setSaved(true);
@@ -132,9 +162,21 @@ export function EditIncidentForm({
         </div>
       </label>
 
+      {preamble && (
+        <div className="border-l-2 border-neutral-300 bg-neutral-50 px-3 py-2">
+          <div className="mb-1 flex items-center gap-2 font-mono text-[9px] uppercase tracking-widest text-neutral-500">
+            <span className="border border-neutral-300 bg-white px-1 py-0.5">openclaw</span>
+            <span>auto-generated context</span>
+          </div>
+          <p className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-neutral-600">
+            {preamble}
+          </p>
+        </div>
+      )}
+
       <label className="block">
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          Notes
+          Dispatcher notes
         </span>
         <textarea
           value={notes}
@@ -149,44 +191,50 @@ export function EditIncidentForm({
         />
       </label>
 
-      {error && (
-        <p className="font-mono text-xs text-black">{error}</p>
-      )}
-      {saved && !dirty && (
-        <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-          Saved
-        </p>
-      )}
+      {error && <p className="font-mono text-xs text-black">{error}</p>}
 
-      <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          onClick={onSave}
-          disabled={pending || !dirty || title.trim().length === 0}
-        >
-          {pending ? "Saving…" : "Save changes"}
-        </Button>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-300">
-          {dirty ? "⌘S to save" : ""}
-        </span>
+      <div className="flex h-9 items-center gap-3">
+        {dirty ? (
+          <>
+            <Button
+              type="button"
+              onClick={onSave}
+              disabled={pending || title.trim().length === 0}
+            >
+              {pending ? "Saving…" : "Save changes"}
+            </Button>
+            <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
+              ⌘S
+            </span>
+          </>
+        ) : (
+          <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-neutral-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-neutral-300" />
+            {saved ? "Saved" : "All changes saved"}
+          </span>
+        )}
       </div>
 
-      <div className="mt-8 border-t border-neutral-200 pt-6">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+      <details className="group mt-4 border-t border-neutral-100 pt-3">
+        <summary className="flex cursor-pointer list-none items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-neutral-400 hover:text-black">
+          <span className="transition-transform group-open:rotate-90">›</span>
           Danger zone
-        </h2>
-        <p className="mt-1 font-mono text-[10px] text-neutral-300">
-          Deleting an incident unlinks its clips. The clips remain in storage.
-        </p>
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={pending}
-          className="mt-3 border border-neutral-300 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-black hover:border-black hover:bg-black hover:text-white disabled:opacity-40"
-        >
-          Delete incident
-        </button>
-      </div>
+        </summary>
+        <div className="mt-2 space-y-2 pl-4">
+          <p className="font-mono text-[10px] leading-relaxed text-neutral-400">
+            Deleting unlinks the clips. The clip files remain in storage and
+            can be re-attached.
+          </p>
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={pending}
+            className="border border-neutral-300 px-3 py-1.5 font-mono text-[10px] uppercase tracking-widest text-black hover:border-black hover:bg-black hover:text-white disabled:opacity-40"
+          >
+            Delete incident
+          </button>
+        </div>
+      </details>
     </div>
   );
 }

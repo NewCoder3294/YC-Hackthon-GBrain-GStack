@@ -1,7 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { scanDispatchAudio } from "@/lib/dispatch-audio-scan";
-import { createSimulatorState, nextDispatchCall } from "@/lib/dispatch-simulator";
+import { loadDispatchCatalog } from "@/lib/dispatch-catalog";
+import { createFeedCursor, nextDispatch } from "@/lib/dispatch-feed";
 import type {
   DispatchIncidentRow,
   IncidentDetail,
@@ -182,23 +182,22 @@ function priorityToSeverity(priority: string): Severity {
   return "low";
 }
 
-// Generate dispatch incident rows from the audio folder using the
-// simulator with a fixed seed so the snapshot is stable across reloads.
-// Filters apply post-generation (severity, q). Time-window filters
-// (from/to) and clip-specific filters (route, tag) are ignored since
-// dispatch entries don't have those dimensions.
+// Project dispatch incident rows from the catalog using a fixed seed so
+// the snapshot is stable across reloads. Filters apply post-projection
+// (severity, q). Time-window filters use the recorded timestamp;
+// clip-specific filters (route, tag) drop dispatch rows entirely.
 export async function listDispatchIncidents(
   filters: IncidentFilters,
 ): Promise<DispatchIncidentRow[]> {
-  const files = await scanDispatchAudio();
+  const files = await loadDispatchCatalog();
   if (files.length === 0) return [];
 
   // Fixed seed → deterministic snapshot. One row per audio file so the
   // incidents archive shows the full catalog.
-  const state = createSimulatorState(files, { seed: 0xa1ec1d });
+  const state = createFeedCursor(files, { seed: 0xa1ec1d });
   const rows: DispatchIncidentRow[] = [];
   for (let i = 0; i < files.length; i++) {
-    const call = nextDispatchCall(state);
+    const call = nextDispatch(state);
     const severity = priorityToSeverity(call.priority);
     rows.push({
       id: `dispatch:${call.fileName}`,
@@ -214,8 +213,8 @@ export async function listDispatchIncidents(
       talkgroupId: call.talkgroupId,
       audioUrl: call.audioUrl,
       fileName: call.fileName,
-      // Use the recorded time when available (parsed from openmhz
-      // filename) so the archive sorts chronologically with clip rows.
+      // Prefer the recorded capture time when available so the archive
+      // sorts chronologically with clip rows.
       createdAt: call.recordedAt ?? call.receivedAt,
     });
   }

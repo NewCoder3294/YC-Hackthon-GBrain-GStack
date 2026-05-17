@@ -1,6 +1,7 @@
-// SF Police hotspots used to scatter dispatch pins across the map. Weights
-// roughly track real SFGov call-volume distribution so the simulation
-// "feels" like SF without being literally true to any one moment.
+// SF Police neighborhood hotspots and weights. Drives map pin
+// distribution and address fallbacks when a dispatch entry doesn't
+// carry an explicit location. Weights approximate published SFGov
+// call-volume share across neighborhoods.
 
 export interface Hotspot {
   name: string;

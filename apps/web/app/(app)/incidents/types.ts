@@ -38,8 +38,8 @@ export interface IncidentFilters {
 }
 
 // Dispatch audio entries surfaced in the same incidents table. They're
-// generated server-side from /public/dispatch-audio/ + the dispatch
-// simulator with a fixed seed (stable per build).
+// projected server-side from the dispatch catalog using a fixed seed
+// (stable per build).
 export interface DispatchIncidentRow {
   id: string;
   kind: "dispatch";

@@ -33,6 +33,25 @@ body {
   color: var(--color-background);
 }
 
+/*
+ * Hidden dark mode. Pure B/W UI means we can flip everything with a single
+ * CSS filter — no per-component dark variants. Media gets double-inverted
+ * so cameras / images stay correct. Toggle is the tiny dot in TopNav;
+ * state persists in localStorage. An inline pre-paint script in layout.tsx
+ * applies the class before first render so there's no white flash.
+ */
+html.dark {
+  filter: invert(1) hue-rotate(180deg);
+  background: #000;
+}
+html.dark img,
+html.dark video,
+html.dark iframe,
+html.dark canvas,
+html.dark [data-no-invert] {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 @keyframes wd-scan {
   0% { transform: translateY(-10%); opacity: 0; }
   10% { opacity: 0.5; }
@@ -76,6 +95,30 @@ body {
     linear-gradient(to bottom, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
   background-size: 40px 40px;
   animation: wd-grid-drift 20s linear infinite;
+}
+
+/* --- Landing diagram interactivity ------------------------------------- */
+/* Dim sibling sources when one is hovered so the active row pops. */
+.wd-diagram-shell svg:hover .wd-fusion-source:not(:hover) {
+  opacity: 0.25;
+}
+.wd-fusion-source { transition: opacity 200ms ease; }
+.wd-fusion-source:hover .wd-fusion-source-chip {
+  fill: #000;
+}
+.wd-fusion-source:hover text { font-weight: 600; }
+.wd-fusion-source:hover .wd-fusion-source-arrow {
+  stroke-width: 2;
+}
+.wd-fusion-source:hover text.wd-fusion-chip-glyph { fill: #fff; }
+
+.wd-diagram-shell svg:hover .wd-memory-chip:not(:hover) {
+  opacity: 0.45;
+}
+.wd-memory-chip { transition: opacity 200ms ease, transform 200ms ease; transform-origin: left center; transform-box: fill-box; }
+.wd-memory-chip:hover { transform: scale(1.04); }
+.wd-memory-chip:hover rect.wd-memory-chip-bg {
+  stroke-width: 2;
 }
 
 @media (prefers-reduced-motion: reduce) {
