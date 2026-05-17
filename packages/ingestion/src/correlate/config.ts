@@ -62,3 +62,13 @@ export const UNKNOWN_SEVERITY = 0.3;
 
 /** Confidence applied when a signal_events row has none. */
 export const DEFAULT_CONFIDENCE = 0.5;
+
+/**
+ * Only the top-N ranked incidents get an LLM-written rationale; the
+ * rest fall back to the instant deterministic narrative. Bounds cost
+ * and latency at scale (the spec's LLM-latency guardrail).
+ */
+export const NARRATE_TOP_N = 15;
+
+/** Per-LLM-call wall-clock cap; on timeout we use the deterministic path. */
+export const LLM_TIMEOUT_MS = 8_000;

@@ -7,7 +7,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { createLogger, type Logger } from "../logger";
-import { AMBIGUOUS_RADIUS_FACTOR, RADIUS_M } from "./config";
+import { AMBIGUOUS_RADIUS_FACTOR, LLM_TIMEOUT_MS, RADIUS_M } from "./config";
 import type { AmbiguousMerge, ScoreFactors, Tier } from "./types";
 
 export const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
@@ -52,6 +52,8 @@ export interface AdjudicatorDeps {
   model?: string | undefined;
   logger?: Logger | undefined;
   apiKey?: string | undefined;
+  /** Per-call wall-clock cap; defaults to LLM_TIMEOUT_MS. */
+  timeoutMs?: number | undefined;
 }
 
 function resolveModel(deps: AdjudicatorDeps): string {
@@ -65,6 +67,23 @@ function resolveApiKey(deps: AdjudicatorDeps): string | undefined {
     return deps.apiKey.length > 0 ? deps.apiKey : undefined;
   const env = process.env.ANTHROPIC_API_KEY;
   return env && env.length > 0 ? env : undefined;
+}
+
+/** Reject if `p` does not settle within `ms` — caps a hung API call. */
+export function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`llm timeout ${ms}ms`)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e instanceof Error ? e : new Error(String(e)));
+      },
+    );
+  });
 }
 
 function firstText(
@@ -125,11 +144,13 @@ export function createAdjudicator(deps: AdjudicatorDeps = {}): Adjudicator {
     client = new Anthropic({ apiKey }) as unknown as AnthropicLike;
   }
   const model = resolveModel(deps);
+  const timeoutMs = deps.timeoutMs ?? LLM_TIMEOUT_MS;
 
   return {
     async resolveAmbiguous(merge, ctx) {
       try {
-        const res = await client!.messages.create({
+        const res = await withTimeout(
+          client!.messages.create({
           model,
           max_tokens: 8,
           system: RESOLVE_SYSTEM,
@@ -143,7 +164,9 @@ export function createAdjudicator(deps: AdjudicatorDeps = {}): Adjudicator {
                 `Same neighborhood: ${ctx.neighborhood}.`,
             },
           ],
-        });
+          }),
+          timeoutMs,
+        );
         const t = (firstText(res.content) ?? "").toUpperCase();
         if (t.includes("MERGE")) return "merge";
         if (t.includes("SPLIT")) return "split";
@@ -158,7 +181,8 @@ export function createAdjudicator(deps: AdjudicatorDeps = {}): Adjudicator {
 
     async narrate(input) {
       try {
-        const res = await client!.messages.create({
+        const res = await withTimeout(
+          client!.messages.create({
           model,
           max_tokens: 90,
           system: NARRATE_SYSTEM,
@@ -178,7 +202,9 @@ export function createAdjudicator(deps: AdjudicatorDeps = {}): Adjudicator {
                 ".",
             },
           ],
-        });
+          }),
+          timeoutMs,
+        );
         const t = firstText(res.content);
         return t === undefined ? deterministicNarrate(input) : t;
       } catch (err: unknown) {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   createAdjudicator,
   deterministicAdjudicator,
+  withTimeout,
   type AnthropicLike,
   type NarrateInput,
 } from "./adjudicate";
@@ -76,6 +77,22 @@ describe("createAdjudicator", () => {
     const a = createAdjudicator({ client, apiKey: "k" });
     expect(await a.resolveAmbiguous(nearMatch, ctx)).toBe("split");
     expect(await a.narrate(narrateInput)).toBe("Three sources converged.");
+  });
+
+  it("withTimeout rejects a hung promise and resolves a fast one", async () => {
+    await expect(
+      withTimeout(new Promise(() => {}), 10),
+    ).rejects.toThrow(/timeout/);
+    await expect(withTimeout(Promise.resolve("ok"), 50)).resolves.toBe("ok");
+  });
+
+  it("a hung client falls back to deterministic via the timeout", async () => {
+    const client: AnthropicLike = {
+      messages: { create: () => new Promise(() => {}) }, // never settles
+    };
+    const a = createAdjudicator({ client, apiKey: "k", timeoutMs: 50 });
+    // resolveAmbiguous must still return (deterministic) without hanging.
+    expect(await a.resolveAmbiguous(nearMatch, ctx)).toBe("merge");
   });
 
   it("falls back to deterministic when the client throws", async () => {

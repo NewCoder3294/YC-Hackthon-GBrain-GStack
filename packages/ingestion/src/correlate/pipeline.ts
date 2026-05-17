@@ -10,7 +10,7 @@ import { sql } from "drizzle-orm";
 import { signalEvents, type Db } from "@caltrans/db";
 import { aggregate, type IncidentRow } from "../baseline/metrics";
 import type { Logger } from "../logger";
-import { BASELINE_DAYS, WINDOW_HOURS } from "./config";
+import { BASELINE_DAYS, NARRATE_TOP_N, WINDOW_HOURS } from "./config";
 import { buildContexts, contextFor } from "./context";
 import { cluster, fnv1a } from "./cluster";
 import { centroidsFromSignals } from "./geo";
@@ -18,7 +18,7 @@ import { normalizeSignal, selectWindow, type RawRow } from "./window";
 import { anomaly, rankIncidents, scoreIncident } from "./score";
 import { buildIncidentPages, type IncidentPage } from "./pages";
 import { writeIncidentPages } from "./gbrain-writer";
-import type { Adjudicator } from "./adjudicate";
+import { deterministicNarrate, type Adjudicator } from "./adjudicate";
 import type { CandidateCluster, ScoredIncident } from "./types";
 
 export interface DatasfBaselineRow {
@@ -146,16 +146,23 @@ export async function correlate(input: CorrelateInput): Promise<{
   );
   const ranked = rankIncidents(scored);
 
-  for (const inc of ranked) {
+  // Only the top-N get an LLM rationale (bounded cost/latency — the
+  // spec's LLM guardrail); the rest use the instant deterministic one.
+  for (let idx = 0; idx < ranked.length; idx += 1) {
+    const inc = ranked[idx]!;
     const ctx = contextFor(contexts, inc.cluster.neighborhood);
-    inc.rationale = await input.adjudicator.narrate({
+    const narrateInput = {
       tier: inc.tier,
       factors: inc.factors,
       sourceCount: new Set(inc.cluster.signals.map((s) => s.source)).size,
       neighborhood: inc.cluster.neighborhood,
       affinityGroup: inc.cluster.signals[0]?.affinityGroup ?? "unknown",
       anomalyRatio: anomaly(inc.cluster, ctx).ratio,
-    });
+    };
+    inc.rationale =
+      idx < NARRATE_TOP_N
+        ? await input.adjudicator.narrate(narrateInput)
+        : deterministicNarrate(narrateInput);
   }
 
   const pages = buildIncidentPages(ranked, now);
