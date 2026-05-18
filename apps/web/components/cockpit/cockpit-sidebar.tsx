@@ -5,8 +5,8 @@ import type {
   NeighborhoodInstability,
 } from "@/lib/cockpit/instability";
 import type { SFBrief } from "@/lib/cockpit/sf-brief";
+import type { TrafficDisruption } from "@/lib/cockpit/traffic-disruptions";
 import { LiveFeedPanel } from "./live-feed-panel";
-import { AwaitingBackendPanel } from "./awaiting-backend-panel";
 import { NeighborhoodInstabilityPanel } from "./neighborhood-instability-panel";
 import { RiskOverviewPanel } from "./risk-overview-panel";
 import { SeverityMixPanel } from "./severity-mix-panel";
@@ -14,6 +14,7 @@ import { CrimeTypesPanel } from "./crime-types-panel";
 import { SourceMixPanel } from "./source-mix-panel";
 import { HourlyPulsePanel } from "./hourly-pulse-panel";
 import { SFBriefPanel } from "./sf-brief-panel";
+import { TrafficDisruptionsPanel } from "./traffic-disruptions-panel";
 import {
   CockpitWidgetHost,
   type CockpitWidget,
@@ -25,6 +26,7 @@ interface Props {
   cityRisk: CityRiskSnapshot;
   aggregates: CockpitAggregates;
   sfBrief: SFBrief;
+  trafficDisruptions: TrafficDisruption[];
 }
 
 export function CockpitSidebar({
@@ -33,6 +35,7 @@ export function CockpitSidebar({
   cityRisk,
   aggregates,
   sfBrief,
+  trafficDisruptions,
 }: Props) {
   // Server-rendered widget bodies passed as children into the client host.
   // The host owns ordering + visibility, the panels stay pure presentational.
@@ -86,16 +89,10 @@ export function CockpitSidebar({
       node: <SFBriefPanel brief={sfBrief} />,
     },
     {
-      id: "shift-posture",
-      label: "Shift Posture",
+      id: "traffic-disruptions",
+      label: "Traffic Disruptions",
       defaultSpan: 2,
-      node: (
-        <AwaitingBackendPanel
-          title="Shift Posture"
-          promise="Active dispatch units, current backlog depth, and per-unit load. Pending real dispatch-unit data; not wired to a feed yet."
-          scheduledFor="Cockpit Phase 5"
-        />
-      ),
+      node: <TrafficDisruptionsPanel rows={trafficDisruptions} />,
     },
   ];
 
