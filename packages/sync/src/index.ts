@@ -12,3 +12,4 @@ export * from "./sources/sf311";
 export * from "./sources/sfpd-reports";
 export * from "./sources/traffic-511";
 export * from "./sources/transit-511";
+export * from "./sources/windy-webcams";
