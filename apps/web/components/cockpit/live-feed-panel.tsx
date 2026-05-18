@@ -17,10 +17,10 @@ function age(iso: string): string {
 }
 
 export function LiveFeedPanel({ rows }: { rows: LiveIncident[] }) {
-  const top = rows.slice(0, 12);
+  const top = rows.slice(0, 10);
   return (
-    <section className="flex flex-col border-b border-neutral-200">
-      <header className="flex items-center justify-between border-b border-neutral-200 px-3 py-2">
+    <section className="flex flex-col">
+      <header className="flex items-center justify-between border-b border-neutral-300 px-2.5 py-1.5">
         <h2 className="font-mono text-[10px] uppercase tracking-widest">
           Live Feed
         </h2>
@@ -28,16 +28,16 @@ export function LiveFeedPanel({ rows }: { rows: LiveIncident[] }) {
           {rows.length} active
         </span>
       </header>
-      <ul className="max-h-72 overflow-y-auto font-mono text-[11px]">
+      <ul className="font-mono text-[11px]">
         {top.length === 0 ? (
-          <li className="px-3 py-4 text-[10px] text-neutral-400">
+          <li className="px-2.5 py-3 text-[10px] text-neutral-400">
             no active live incidents
           </li>
         ) : (
           top.map((r) => (
             <li
               key={r.id}
-              className="flex items-baseline gap-2 border-b border-neutral-100 px-3 py-1.5 last:border-b-0"
+              className="flex items-baseline gap-2 border-b border-neutral-100 px-2.5 py-1 last:border-b-0"
             >
               <span className="shrink-0 text-[9px] uppercase tracking-widest text-neutral-400">
                 {age(r.occurredAt)}

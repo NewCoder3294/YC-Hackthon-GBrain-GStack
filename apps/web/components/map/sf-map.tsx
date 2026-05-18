@@ -7,10 +7,7 @@ import type { CameraTileData } from "@/components/cameras/camera-tile";
 import { CameraTile } from "@/components/cameras/camera-tile";
 import { IncidentPanel } from "./incident-panel";
 import { DispatchPanel } from "./dispatch-panel";
-import { EventFeed } from "./event-feed";
 import { NewsPanel, type NewsIncidentRow } from "./news-panel";
-import { TopPriorityPanel } from "./top-priority-panel";
-import { useEventStream } from "@/hooks/use-event-stream";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
 import { isHighPriority, type DispatchCall } from "@/lib/dispatch";
 import { useDispatchFeed } from "@/hooks/use-dispatch-feed";
@@ -116,7 +113,6 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
   const [selectedNews, setSelectedNews] = useState<NewsIncidentRow | null>(null);
 
   const dispatch = useDispatchFeed();
-  const eventStream = useEventStream(dispatch.calls);
 
   const locateOnMap = useCallback((lat: number, lng: number) => {
     const map = mapRef.current;
@@ -622,17 +618,6 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
           onClose={() => setSelectedNews(null)}
         />
       )}
-
-      <TopPriorityPanel onFocus={locateOnMap} />
-
-      <EventFeed
-        events={eventStream.events}
-        officers={eventStream.officers}
-        onCancel={eventStream.cancel}
-        onReassign={eventStream.reassign}
-        onDispatchNow={eventStream.dispatchNow}
-        onLocate={locateOnMap}
-      />
 
 
       <style jsx global>{`
