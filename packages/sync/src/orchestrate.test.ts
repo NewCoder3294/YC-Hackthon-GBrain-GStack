@@ -45,6 +45,12 @@ vi.mock("./sources/sffd-active", () => ({
     .mockResolvedValue({ rows: [], highWaterMark: null }),
   SFFD_ACTIVE_SOURCE: "sffd_active",
 }));
+vi.mock("./sources/scanner-calls", () => ({
+  fetchScannerCalls: vi
+    .fn()
+    .mockResolvedValue({ rows: [], highWaterMark: null }),
+  SCANNER_CALLS_SOURCE: "scanner_calls",
+}));
 
 // Tiny db that records mutations and lets us seed prior sync state.
 function buildMockDb(priorSyncs: Record<string, { lastRunAt: Date; lastHighWaterMark: Date | null }> = {}) {

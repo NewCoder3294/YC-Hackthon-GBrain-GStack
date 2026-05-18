@@ -25,6 +25,10 @@ import { fetchTraffic511, TRAFFIC_511_SOURCE } from "./sources/traffic-511";
 import { fetchTransit511, TRANSIT_511_SOURCE } from "./sources/transit-511";
 import { fetchPGEOutages, PGE_OUTAGES_SOURCE } from "./sources/pge-outages";
 import { fetchSFFDActive, SFFD_ACTIVE_SOURCE } from "./sources/sffd-active";
+import {
+  fetchScannerCalls,
+  SCANNER_CALLS_SOURCE,
+} from "./sources/scanner-calls";
 
 export type SourceId =
   | typeof SFPD_CAD_SOURCE
@@ -34,7 +38,8 @@ export type SourceId =
   | typeof TRAFFIC_511_SOURCE
   | typeof TRANSIT_511_SOURCE
   | typeof PGE_OUTAGES_SOURCE
-  | typeof SFFD_ACTIVE_SOURCE;
+  | typeof SFFD_ACTIVE_SOURCE
+  | typeof SCANNER_CALLS_SOURCE;
 
 export interface SourceConfig {
   id: SourceId;
@@ -57,6 +62,7 @@ export const SOURCE_CONFIGS: Record<SourceId, SourceConfig> = {
   [TRANSIT_511_SOURCE]: { id: TRANSIT_511_SOURCE, minIntervalMs: 5 * 60_000, incremental: false },
   [PGE_OUTAGES_SOURCE]: { id: PGE_OUTAGES_SOURCE, minIntervalMs: 10 * 60_000, incremental: false },
   [SFFD_ACTIVE_SOURCE]: { id: SFFD_ACTIVE_SOURCE, minIntervalMs: 2 * 60_000, incremental: false },
+  [SCANNER_CALLS_SOURCE]: { id: SCANNER_CALLS_SOURCE, minIntervalMs: 2 * 60_000, incremental: true },
 };
 
 export interface OrchestrateDeps {
@@ -122,6 +128,8 @@ async function runSource(
       return fetchPGEOutages({ fetch: deps.fetch });
     case SFFD_ACTIVE_SOURCE:
       return fetchSFFDActive({ fetch: deps.fetch });
+    case SCANNER_CALLS_SOURCE:
+      return fetchScannerCalls({ fetch: deps.fetch }, sinceOpt);
   }
 }
 

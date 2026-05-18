@@ -15,6 +15,7 @@ export * from "./sources/transit-511";
 export * from "./sources/windy-webcams";
 export * from "./sources/pge-outages";
 export * from "./sources/sffd-active";
+export * from "./sources/scanner-calls";
 export * from "./sources/news-rss";
 export * from "./news-incidents";
 export * from "./orchestrate-news";
