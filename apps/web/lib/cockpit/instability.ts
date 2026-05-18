@@ -54,6 +54,17 @@ export interface CockpitAggregates {
 
 const SF_BBOX = { minLat: 37.7, maxLat: 37.84, minLng: -122.52, maxLng: -122.35 };
 
+// Map the orchestrator's internal source IDs to display labels for the
+// Source Mix panel. Unknown values fall through unchanged.
+const SOURCE_DISPLAY: Record<string, string> = {
+  sfpd_cad: "SFPD CAD",
+  sfpd_reports: "SFPD Reports",
+  sf_311: "SF 311",
+  fire_ems: "Fire / EMS",
+  "511_traffic": "511 Traffic",
+  "511_transit": "511 Transit",
+};
+
 function severityWeight(s: "low" | "med" | "high"): number {
   return s === "high" ? 10 : s === "med" ? 3 : 1;
 }
@@ -75,17 +86,22 @@ export async function loadInstability(): Promise<{
 }> {
   const supabase = await createClient();
   // Pull the last 48 h so we can compare current vs prior 24 h windows.
+  // Reads `live_incidents` — the real DataSF orchestrator output (SFPD CAD,
+  // SF 311, SFPD reports, 511 traffic). `news_incidents` was historically
+  // seeded synthetic data and is no longer the canonical incident table.
   const since = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
-    .from("news_incidents")
-    .select("severity, neighborhood, crime_type, source, lat, lng, published_at")
-    .gte("published_at", since)
+    .from("live_incidents")
+    .select("severity, neighborhood, title, source, lat, lng, occurred_at")
+    .gte("occurred_at", since)
+    .not("lat", "is", null)
+    .not("lng", "is", null)
     .gte("lat", SF_BBOX.minLat)
     .lte("lat", SF_BBOX.maxLat)
     .gte("lng", SF_BBOX.minLng)
     .lte("lng", SF_BBOX.maxLng)
-    .order("published_at", { ascending: false })
-    .limit(1500);
+    .order("occurred_at", { ascending: false })
+    .limit(2500);
 
   if (error || !data) {
     return {
@@ -122,20 +138,25 @@ export async function loadInstability(): Promise<{
     const sev = (row.severity as string) === "high" ? "high"
       : (row.severity as string) === "med" ? "med" : "low";
     const nbhd = (row.neighborhood as string | null)?.trim() || "Unknown";
-    const publishedAt = row.published_at as string;
-    const ageMs = now - new Date(publishedAt).getTime();
+    const occurredAt = row.occurred_at as string;
+    const ageMs = now - new Date(occurredAt).getTime();
     if (ageMs < 0) continue;
 
     if (ageMs <= cutoffMs) {
       currentTotal += 1;
       severity[sev] += 1;
-      const crimeType = ((row as { crime_type?: string | null }).crime_type ?? "other")
+      // live_incidents.title is the CAD/911 call descriptor — uppercase,
+      // operator-readable ("SHOT SPOTTER", "PROWLER", "ASSAULT / BATTERY").
+      // Lowercased for the Crime Types panel.
+      const crimeType = ((row as { title?: string | null }).title ?? "other")
         .toString()
-        .trim() || "other";
+        .trim()
+        .toLowerCase() || "other";
       crimeCounts.set(crimeType, (crimeCounts.get(crimeType) ?? 0) + 1);
-      const source = ((row as { source?: string | null }).source ?? "unknown")
+      const rawSource = ((row as { source?: string | null }).source ?? "unknown")
         .toString()
         .trim() || "unknown";
+      const source = SOURCE_DISPLAY[rawSource] ?? rawSource;
       sourceCounts.set(source, (sourceCounts.get(source) ?? 0) + 1);
       const ageH = ageMs / (60 * 60 * 1000);
       // Bucket 0 = oldest (~23 h ago), 23 = newest (now-ish).
