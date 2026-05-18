@@ -275,7 +275,7 @@ function VerdictMixBar({
       <div className="flex h-2.5 w-full overflow-hidden border border-neutral-300">
         {counts.corroborate > 0 && (
           <div
-            className="bg-emerald-500"
+            className="bg-black"
             style={{ width: `${pct(counts.corroborate)}%` }}
             title={`Corroborate · ${counts.corroborate}`}
           />
@@ -289,23 +289,23 @@ function VerdictMixBar({
         )}
         {counts.contradict > 0 && (
           <div
-            className="bg-rose-500"
+            className="bg-black"
             style={{ width: `${pct(counts.contradict)}%` }}
             title={`Contradict · ${counts.contradict}`}
           />
         )}
       </div>
       <div className="mt-2 flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest">
-        <span className="flex items-center gap-1 text-emerald-700">
-          <LegendDot color="bg-emerald-500" />
+        <span className="flex items-center gap-1 text-black">
+          <LegendDot color="bg-black" />
           <span className="tabular-nums">{counts.corroborate}</span>
         </span>
         <span className="flex items-center gap-1 text-neutral-500">
           <LegendDot color="bg-neutral-300" />
           <span className="tabular-nums">{counts.neutral}</span>
         </span>
-        <span className="flex items-center gap-1 text-rose-700">
-          <LegendDot color="bg-rose-500" />
+        <span className="flex items-center gap-1 text-black">
+          <LegendDot color="bg-black" />
           <span className="tabular-nums">{counts.contradict}</span>
         </span>
       </div>
@@ -332,9 +332,9 @@ function LastRun({ iso }: { iso: string | null }) {
   const fresh = diff < 5 * 60_000;
   const recent = diff < 60 * 60_000;
   const dotTone = fresh
-    ? "bg-amber-400"
+    ? "bg-neutral-700"
     : recent
-      ? "bg-emerald-500"
+      ? "bg-black"
       : "bg-neutral-300";
   return (
     <div>
@@ -358,16 +358,16 @@ function ConfidenceMeter({ value }: { value: number | null }) {
   const pct = Math.max(0, Math.min(1, value)) * 100;
   const tone =
     value >= 0.66
-      ? "bg-emerald-500"
+      ? "bg-black"
       : value >= 0.33
-        ? "bg-amber-400"
-        : "bg-rose-500";
+        ? "bg-neutral-700"
+        : "bg-black";
   const textTone =
     value >= 0.66
-      ? "text-emerald-700"
+      ? "text-black"
       : value >= 0.33
-        ? "text-amber-700"
-        : "text-rose-700";
+        ? "text-neutral-800"
+        : "text-black";
   return (
     <div>
       <div className={`font-mono text-2xl tabular-nums ${textTone}`}>
@@ -508,22 +508,22 @@ function VerdictChip({
 }) {
   const dot =
     accent === "emerald"
-      ? "bg-emerald-500"
+      ? "bg-black"
       : accent === "rose"
-        ? "bg-rose-500"
+        ? "bg-black"
         : accent === "neutral"
           ? "bg-neutral-400"
-          : "bg-amber-400";
+          : "bg-neutral-700";
   const base =
     "inline-flex items-center gap-1.5 h-7 border px-2 font-mono text-[10px] uppercase tracking-widest transition-colors";
   const activeStyle =
     accent === "emerald"
-      ? "border-emerald-600 bg-emerald-50 text-emerald-900"
+      ? "border-black bg-white text-black font-semibold"
       : accent === "rose"
-        ? "border-rose-600 bg-rose-50 text-rose-900"
+        ? "border-black bg-neutral-100 text-black font-semibold"
         : accent === "neutral"
           ? "border-neutral-700 bg-neutral-100 text-neutral-900"
-          : "border-amber-500 bg-amber-50 text-amber-900";
+          : "border-neutral-700 bg-neutral-50 text-black";
   const state = active
     ? activeStyle
     : "border-neutral-200 bg-white text-neutral-700 hover:border-black hover:text-black";
@@ -584,7 +584,7 @@ function ResultRow({
                 href={row.url}
                 target="_blank"
                 rel="noreferrer"
-                className="font-mono text-xs text-black decoration-amber-500 decoration-2 underline-offset-2 hover:text-amber-700 hover:underline"
+                className="font-mono text-xs text-black decoration-black decoration-2 underline-offset-2 hover:text-neutral-800 hover:underline"
               >
                 {row.title || row.url}
               </a>
@@ -666,20 +666,20 @@ function IncidentChip({
     severity === "high"
       ? {
           border: "border-rose-500",
-          accent: "bg-rose-500",
-          label: "text-rose-700",
+          accent: "bg-black",
+          label: "text-black",
         }
       : severity === "med"
         ? {
-            border: "border-amber-500",
-            accent: "bg-amber-400",
-            label: "text-amber-700",
+            border: "border-neutral-700",
+            accent: "bg-neutral-700",
+            label: "text-neutral-800",
           }
         : severity === "low"
           ? {
-              border: "border-emerald-500",
-              accent: "bg-emerald-500",
-              label: "text-emerald-700",
+              border: "border-black",
+              accent: "bg-black",
+              label: "text-black",
             }
           : {
               border: "border-neutral-200",
@@ -713,13 +713,13 @@ function VerdictMark({ verdict }: { verdict: Verdict }) {
       ? {
           label: "✓",
           className:
-            "border-emerald-600 bg-emerald-500 text-white shadow-[0_0_0_1px_rgba(16,185,129,0.15)]",
+            "border-black bg-black text-white shadow-[0_0_0_1px_rgba(0,0,0,0.15)]",
         }
       : verdict === "contradict"
         ? {
             label: "✗",
             className:
-              "border-rose-600 bg-rose-500 text-white shadow-[0_0_0_1px_rgba(244,63,94,0.15)]",
+              "border-black bg-black text-white shadow-[0_0_0_1px_rgba(244,63,94,0.15)]",
           }
         : {
             label: "·",
@@ -742,10 +742,10 @@ function MetricBar({ label, value }: { label: string; value: number | null }) {
   const tone = !hasValue
     ? ""
     : value >= 0.66
-      ? "bg-emerald-500"
+      ? "bg-black"
       : value >= 0.33
-        ? "bg-amber-400"
-        : "bg-rose-400";
+        ? "bg-neutral-700"
+        : "bg-neutral-500";
   return (
     <div>
       <div className="flex items-center justify-between font-mono text-[10px] uppercase tracking-widest text-neutral-400">

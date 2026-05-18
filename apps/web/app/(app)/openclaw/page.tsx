@@ -213,7 +213,7 @@ export default async function OpenclawPage() {
       <header className="border-b border-neutral-200 px-4 pt-3 pb-2">
         <div className="flex items-baseline gap-3">
           <h1 className="font-mono text-sm uppercase tracking-widest">
-            <span className="border-b-2 border-amber-400 pb-0.5">Open</span>Claw
+            <span className="border-b-2 border-black pb-0.5">Open</span>Claw
           </h1>
           <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
             Worker activity feed

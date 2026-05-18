@@ -1,5 +1,5 @@
 import "server-only";
-import { gbrainPriorContext, type GbrainSearchHit } from "../../kg/actions";
+import { gbrainPriorContext, type GbrainSearchHit } from "@/app/(app)/(intel)/kg/actions";
 
 interface Props {
   incidentId: string;

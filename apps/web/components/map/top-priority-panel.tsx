@@ -11,10 +11,11 @@ interface Props {
 
 const POLL_MS = 15_000;
 
+// Monochrome priority signal — size + fill, no hue.
 const TIER_DOT: Record<Tier, string> = {
-  P1: "bg-red-500",
-  P2: "bg-amber-500",
-  P3: "bg-neutral-400",
+  P1: "bg-black ring-2 ring-black",
+  P2: "bg-black",
+  P3: "bg-neutral-500",
   P4: "bg-neutral-300",
 };
 

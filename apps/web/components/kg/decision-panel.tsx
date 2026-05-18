@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { cn } from "@/lib/utils";
-import { recordDecision } from "@/app/(app)/kg/actions";
+import { recordDecision } from "@/app/(app)/(intel)/kg/actions";
 
 interface Props {
   incidentId: string;

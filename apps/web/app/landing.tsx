@@ -417,7 +417,7 @@ function YCBadge() {
       href="https://events.ycombinator.com/GStack"
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex items-center gap-2 border border-[#FF6601] bg-white py-1 pl-1 pr-3 font-mono text-[10px] uppercase tracking-widest text-[#FF6601] transition-colors hover:bg-[#FFF1E8]"
+      className="group inline-flex items-center gap-2 border border-black bg-white py-1 pl-1 pr-3 font-mono text-[10px] uppercase tracking-widest text-black transition-colors hover:bg-neutral-100"
     >
       <Image
         src="/yc-logo.png"
@@ -776,7 +776,7 @@ function HowStep({
 
 const DIAGRAM_STROKE = "#000";
 const DIAGRAM_MUTED = "#9ca3af";
-const DIAGRAM_ACCENT = "#FF6601";
+const DIAGRAM_ACCENT = "#000";
 const PX_MONO = "ui-monospace, 'SF Mono', monospace";
 
 function ArrowDef({ id, color = DIAGRAM_STROKE }: { id: string; color?: string }) {

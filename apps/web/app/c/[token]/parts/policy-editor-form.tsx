@@ -286,9 +286,9 @@ export function PolicyEditorForm({
         </div>
       </div>
 
-      {error && <p className="font-mono text-xs text-rose-600">{error}</p>}
+      {error && <p className="font-mono text-xs text-black">{error}</p>}
       {saved && (
-        <p className="font-mono text-[10px] uppercase tracking-widest text-emerald-600">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-black">
           Saved · applies to next query
         </p>
       )}

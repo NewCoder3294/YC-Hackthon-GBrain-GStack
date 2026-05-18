@@ -9,6 +9,9 @@ import { thumbnailUrl } from "../thumbnail-url";
 import { EditIncidentForm } from "./edit-form";
 import { TagEditor } from "./tag-editor";
 import { PriorContext } from "./prior-context";
+import { DecisionPanel } from "@/components/kg/decision-panel";
+import { CameraAccessRow } from "./camera-access-row";
+import { createClient } from "@/lib/supabase/server";
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -64,6 +67,21 @@ export default async function IncidentDetailPage({ params }: PageProps) {
   const signedUrl = primary
     ? await getClipSignedUrl(primary.storagePath)
     : null;
+
+  // Cameras on scene: unique camera per clip, used by the policy-enforcer UI.
+  const seenCameraIds = new Set<string>();
+  const linkedCameras = incident.clips
+    .map((c) => c.camera)
+    .filter((cam): cam is NonNullable<typeof cam> => Boolean(cam))
+    .filter((cam) => {
+      if (seenCameraIds.has(cam.id)) return false;
+      seenCameraIds.add(cam.id);
+      return true;
+    });
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const reviewerHint = user?.email ?? user?.id ?? "dispatcher";
 
   return (
     <section className="flex h-full flex-col">
@@ -189,6 +207,36 @@ export default async function IncidentDetailPage({ params }: PageProps) {
 
           <Section title="Prior Context" hint="GBrain">
             <PriorContext incidentId={incident.id} />
+          </Section>
+
+          <Section title="Decision">
+            <DecisionPanel
+              incidentId={incident.id}
+              reviewerHint={reviewerHint}
+            />
+          </Section>
+
+          <Section
+            title="Cameras on scene"
+            count={linkedCameras.length}
+          >
+            {linkedCameras.length === 0 ? (
+              <p className="font-mono text-[10px] text-neutral-500">
+                No linked cameras.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {linkedCameras.map((cam) => (
+                  <CameraAccessRow
+                    key={cam.id}
+                    cameraId={cam.id}
+                    cameraLabel={cam.description}
+                    incidentId={incident.id}
+                    isPublic={!cam.contributorId}
+                  />
+                ))}
+              </div>
+            )}
           </Section>
 
           {primary && signedUrl && (
