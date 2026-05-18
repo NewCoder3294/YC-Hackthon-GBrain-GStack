@@ -11,6 +11,15 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+// Placeholder HLS pool — four working Mux master playlists. Catalog rotates
+// through these until real public street-level feeds are wired (Windy, city
+// open data). The previous catalog referenced url_0/url_0.m3u8 paths which
+// 404; switching to master playlists makes every Streets tile render.
+//   - https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8
+//   - https://test-streams.mux.dev/test_001/stream.m3u8
+//   - https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8
+//   - https://test-streams.mux.dev/pts_shift/master.m3u8
+
 export interface CuratedCamera {
   /** Stable slug. Used as the `caltrans_id` upsert key — the column name
    *  predates this spec and is kept for backwards compatibility. */
@@ -36,7 +45,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "mission",
     lat: 37.7651,
     lng: -122.4194,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_0/url_0.m3u8",
+    streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     attribution: "EarthCam",
     attributionUrl: "https://www.earthcam.com/usa/california/sanfrancisco/",
   },
@@ -46,7 +55,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "mission",
     lat: 37.7522,
     lng: -122.4187,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_1/url_1.m3u8",
+    streamUrl: "https://test-streams.mux.dev/test_001/stream.m3u8",
     attribution: "EarthCam",
   },
   {
@@ -55,7 +64,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "embarcadero",
     lat: 37.7943,
     lng: -122.3946,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_2/url_2.m3u8",
+    streamUrl: "https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8",
     attribution: "Port of SF",
   },
   {
@@ -64,7 +73,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "embarcadero",
     lat: 37.7956,
     lng: -122.3935,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_3/url_3.m3u8",
+    streamUrl: "https://test-streams.mux.dev/pts_shift/master.m3u8",
     attribution: "Port of SF",
   },
   {
@@ -73,7 +82,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "twin-peaks",
     lat: 37.7544,
     lng: -122.4477,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_4/url_4.m3u8",
+    streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     attribution: "EarthCam",
   },
   {
@@ -82,7 +91,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "north-beach",
     lat: 37.7977,
     lng: -122.408,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_5/url_5.m3u8",
+    streamUrl: "https://test-streams.mux.dev/test_001/stream.m3u8",
     attribution: "SFGovTV",
   },
   {
@@ -91,7 +100,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "castro",
     lat: 37.7619,
     lng: -122.435,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_6/url_6.m3u8",
+    streamUrl: "https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8",
     attribution: "EarthCam",
   },
   {
@@ -100,7 +109,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "soma",
     lat: 37.7807,
     lng: -122.4067,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_7/url_7.m3u8",
+    streamUrl: "https://test-streams.mux.dev/pts_shift/master.m3u8",
     attribution: "Moscone Center",
   },
   {
@@ -109,7 +118,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "tenderloin",
     lat: 37.7836,
     lng: -122.4159,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_8/url_8.m3u8",
+    streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     attribution: "SFGov",
   },
   {
@@ -118,7 +127,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "fishermans-wharf",
     lat: 37.808,
     lng: -122.4177,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_9/url_9.m3u8",
+    streamUrl: "https://test-streams.mux.dev/test_001/stream.m3u8",
     attribution: "EarthCam",
   },
   {
@@ -127,7 +136,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "marina",
     lat: 37.8059,
     lng: -122.4435,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_0/url_0.m3u8",
+    streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     attribution: "Presidio Trust",
   },
   {
@@ -136,7 +145,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "haight",
     lat: 37.7699,
     lng: -122.4469,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_1/url_1.m3u8",
+    streamUrl: "https://test-streams.mux.dev/test_001/stream.m3u8",
     attribution: "EarthCam",
   },
   {
@@ -145,7 +154,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "richmond",
     lat: 37.7826,
     lng: -122.4641,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_2/url_2.m3u8",
+    streamUrl: "https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8",
     attribution: "SFGov",
   },
   {
@@ -154,7 +163,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "sunset",
     lat: 37.7635,
     lng: -122.4773,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_3/url_3.m3u8",
+    streamUrl: "https://test-streams.mux.dev/pts_shift/master.m3u8",
     attribution: "SFGov",
   },
   {
@@ -163,7 +172,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "bayview",
     lat: 37.7349,
     lng: -122.391,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_4/url_4.m3u8",
+    streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     attribution: "SFGov",
   },
   {
@@ -172,7 +181,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "civic-center",
     lat: 37.7795,
     lng: -122.4194,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_5/url_5.m3u8",
+    streamUrl: "https://test-streams.mux.dev/test_001/stream.m3u8",
     attribution: "SFGovTV",
   },
   {
@@ -181,7 +190,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "union-square",
     lat: 37.7879,
     lng: -122.4075,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_6/url_6.m3u8",
+    streamUrl: "https://test-streams.mux.dev/dai-discontinuity-deltatre/manifest.m3u8",
     attribution: "EarthCam",
   },
   {
@@ -190,7 +199,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "financial",
     lat: 37.789,
     lng: -122.402,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_7/url_7.m3u8",
+    streamUrl: "https://test-streams.mux.dev/pts_shift/master.m3u8",
     attribution: "SFGovTV",
   },
   {
@@ -199,7 +208,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "soma",
     lat: 37.776,
     lng: -122.4042,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_8/url_8.m3u8",
+    streamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
     attribution: "SFGov",
   },
   {
@@ -208,7 +217,7 @@ export const CURATED_SF_CAMERAS: CuratedCamera[] = [
     neighborhood: "japantown",
     lat: 37.7853,
     lng: -122.4297,
-    streamUrl: "https://test-streams.mux.dev/x36xhzz/url_9/url_9.m3u8",
+    streamUrl: "https://test-streams.mux.dev/test_001/stream.m3u8",
     attribution: "EarthCam",
   },
 ];

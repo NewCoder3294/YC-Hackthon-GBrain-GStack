@@ -26,8 +26,19 @@ const ALLOWED_HOSTS = new Set([
   "cwwp2.dot.ca.gov",
 ]);
 
+// Dev/staging only — placeholder HLS for dense-neighborhood Streets tiles
+// until we wire up real public street-level feeds (Windy, city open data).
+// Production keeps a tight CalTrans-only allowlist.
+const DEV_ALLOWED_HOSTS = new Set([
+  "test-streams.mux.dev",
+]);
+
 function isAllowed(target: URL): boolean {
-  return ALLOWED_HOSTS.has(target.hostname);
+  if (ALLOWED_HOSTS.has(target.hostname)) return true;
+  if (process.env.NODE_ENV !== "production" && DEV_ALLOWED_HOSTS.has(target.hostname)) {
+    return true;
+  }
+  return false;
 }
 
 function proxyUrl(target: URL, origin: string): string {
