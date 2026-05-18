@@ -2,7 +2,9 @@
 //
 // Endpoint: GET https://opensky-network.org/api/states/all
 //   ?lamin=..&lomin=..&lamax=..&lomax=..
-// Auth: keyless for limited use; HTTP Basic auth for higher rate limits.
+// Auth: keyless for limited use; OAuth2 (client_credentials) for higher
+// rate limits. OpenSky migrated off HTTP Basic auth in 2025. Tokens are
+// fetched from their Keycloak endpoint and cached for their TTL.
 // Free tier limits aggressively, so the cron polls only every 5 min.
 //
 // Response shape per the OpenSky docs:
@@ -39,6 +41,68 @@ import { SF_CITY_HALL } from "../sf-bounds";
 export const ADSB_SOURCE = "adsb_opensky";
 
 const OPENSKY_ENDPOINT = "https://opensky-network.org/api/states/all";
+const OPENSKY_TOKEN_ENDPOINT =
+  "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token";
+
+interface CachedOpenskyToken {
+  token: string;
+  expiresAtMs: number;
+  clientId: string;
+}
+
+// Module-level cache for the OAuth2 bearer token. Keycloak tokens are
+// typically valid for 30 min; we refresh 30s before expiry to dodge
+// clock skew. Keyed on clientId so changing creds (e.g. between tests)
+// invalidates the cached token.
+let cachedOpenskyToken: CachedOpenskyToken | null = null;
+
+/** Test-only: reset the OAuth2 token cache between unit tests. */
+export function __resetAdsbTokenCache(): void {
+  cachedOpenskyToken = null;
+}
+
+async function getOpenskyAccessToken(
+  fetchFn: typeof globalThis.fetch,
+  clientId: string,
+  clientSecret: string,
+  nowMs: number,
+): Promise<string> {
+  if (
+    cachedOpenskyToken &&
+    cachedOpenskyToken.clientId === clientId &&
+    cachedOpenskyToken.expiresAtMs > nowMs + 30_000
+  ) {
+    return cachedOpenskyToken.token;
+  }
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: clientId,
+    client_secret: clientSecret,
+  });
+  const res = await fetchFn(OPENSKY_TOKEN_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `adsb_opensky token ${res.status}: ${await res.text()}`,
+    );
+  }
+  const json = (await res.json()) as {
+    access_token?: string;
+    expires_in?: number;
+  };
+  if (!json.access_token || typeof json.expires_in !== "number") {
+    throw new Error("adsb_opensky token response missing access_token / expires_in");
+  }
+  cachedOpenskyToken = {
+    token: json.access_token,
+    expiresAtMs: nowMs + json.expires_in * 1000,
+    clientId,
+  };
+  return json.access_token;
+}
 
 // 25km radius around SF — matches the brief.
 const SEARCH_RADIUS_KM = 25;
@@ -63,8 +127,8 @@ interface OpenSkyResponse {
 
 export interface AdsbDeps {
   fetch?: typeof globalThis.fetch;
-  username?: string | undefined;
-  password?: string | undefined;
+  clientId?: string | undefined;
+  clientSecret?: string | undefined;
   now?: () => Date;
 }
 
@@ -124,8 +188,9 @@ function classify(
 
 export async function fetchAdsb(deps: AdsbDeps = {}): Promise<AdsbResult> {
   const fetchFn = deps.fetch ?? fetch;
-  const username = deps.username ?? process.env.OPENSKY_USERNAME;
-  const password = deps.password ?? process.env.OPENSKY_PASSWORD;
+  const clientId = deps.clientId ?? process.env.OPENSKY_CLIENT_ID;
+  const clientSecret =
+    deps.clientSecret ?? process.env.OPENSKY_CLIENT_SECRET;
   const now = deps.now ? deps.now() : new Date();
 
   const params = new URLSearchParams({
@@ -137,9 +202,14 @@ export async function fetchAdsb(deps: AdsbDeps = {}): Promise<AdsbResult> {
   });
 
   const headers: Record<string, string> = {};
-  if (username && password) {
-    headers["Authorization"] =
-      "Basic " + Buffer.from(`${username}:${password}`).toString("base64");
+  if (clientId && clientSecret) {
+    const token = await getOpenskyAccessToken(
+      fetchFn,
+      clientId,
+      clientSecret,
+      now.getTime(),
+    );
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   const res = await fetchFn(`${OPENSKY_ENDPOINT}?${params.toString()}`, {

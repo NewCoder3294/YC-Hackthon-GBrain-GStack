@@ -22,11 +22,11 @@ const schema = z.object({
   // Request one at https://api.purpleair.com/. Without this the cron
   // /api/cron/sync-env returns `disabled: true` for the AQI source.
   PURPLEAIR_API_KEY: z.string().min(8).optional(),
-  // OpenSky Network ADS-B — keyless usage is heavily rate-limited.
-  // Providing HTTP Basic credentials lifts the per-IP cap. Both must be
-  // set together; either alone is ignored.
-  OPENSKY_USERNAME: z.string().min(1).optional(),
-  OPENSKY_PASSWORD: z.string().min(1).optional(),
+  // OpenSky Network ADS-B — OAuth2 client credentials (the API moved off
+  // basic auth in 2025). Setting both lifts the per-IP rate cap. Either
+  // alone is ignored. https://opensky-network.org/data/api
+  OPENSKY_CLIENT_ID: z.string().min(1).optional(),
+  OPENSKY_CLIENT_SECRET: z.string().min(1).optional(),
   // AISStream.io websocket key — required for the marine vessel layer.
   // Free tier at https://aisstream.io/. Without it the AIS source
   // degrades to `disabled: true`.
@@ -53,8 +53,8 @@ export const env = schema.parse({
   SF_511_API_KEY: blank(process.env.SF_511_API_KEY),
   SOCRATA_APP_TOKEN: blank(process.env.SOCRATA_APP_TOKEN),
   PURPLEAIR_API_KEY: blank(process.env.PURPLEAIR_API_KEY),
-  OPENSKY_USERNAME: blank(process.env.OPENSKY_USERNAME),
-  OPENSKY_PASSWORD: blank(process.env.OPENSKY_PASSWORD),
+  OPENSKY_CLIENT_ID: blank(process.env.OPENSKY_CLIENT_ID),
+  OPENSKY_CLIENT_SECRET: blank(process.env.OPENSKY_CLIENT_SECRET),
   AISSTREAM_API_KEY: blank(process.env.AISSTREAM_API_KEY),
   BART_API_KEY: blank(process.env.BART_API_KEY),
 });

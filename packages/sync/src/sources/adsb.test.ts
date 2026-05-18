@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { fetchAdsb } from "./adsb";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { fetchAdsb, __resetAdsbTokenCache } from "./adsb";
 
 // OpenSky state tuple — 18 indices. We only populate the ones we read.
 // Indices: 0 icao24, 1 callsign, 4 last_contact, 5 lng, 6 lat,
@@ -36,6 +36,10 @@ function mockOk(body: unknown) {
 }
 
 describe("fetchAdsb", () => {
+  beforeEach(() => {
+    __resetAdsbTokenCache();
+  });
+
   it("flags an aircraft with category=7 as a helicopter", async () => {
     const fetchImpl = mockOk({
       time: 0,
@@ -138,5 +142,37 @@ describe("fetchAdsb", () => {
     await expect(
       fetchAdsb({ fetch: fetchImpl as unknown as typeof fetch }),
     ).rejects.toThrow(/adsb_opensky 429/);
+  });
+
+  it("exchanges client credentials for a bearer token when provided", async () => {
+    const fetchImpl = vi
+      .fn()
+      // 1st call: token endpoint
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ access_token: "tok-abc", expires_in: 1800 }),
+      })
+      // 2nd call: states endpoint
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ time: 0, states: [] }),
+      });
+    await fetchAdsb({
+      fetch: fetchImpl as unknown as typeof fetch,
+      clientId: "test-client",
+      clientSecret: "test-secret",
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const tokenCall = fetchImpl.mock.calls[0]!;
+    expect(String(tokenCall[0])).toContain(
+      "auth.opensky-network.org",
+    );
+    expect((tokenCall[1] as RequestInit | undefined)?.method).toBe("POST");
+    const statesCall = fetchImpl.mock.calls[1]!;
+    const statesInit = statesCall[1] as RequestInit | undefined;
+    const auth = (statesInit?.headers as Record<string, string> | undefined)?.[
+      "Authorization"
+    ];
+    expect(auth).toBe("Bearer tok-abc");
   });
 });
