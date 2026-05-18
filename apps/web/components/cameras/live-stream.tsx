@@ -169,10 +169,10 @@ export function LiveStream({
           aria-hidden
           className={`pointer-events-none absolute right-1 top-1 inline-block h-1.5 w-1.5 rounded-full ${
             status === "live"
-              ? "bg-green-400"
+              ? "bg-white shadow-[0_0_4px_rgba(255,255,255,0.9)]"
               : status === "loading"
-                ? "bg-neutral-300 animate-pulse"
-                : "bg-neutral-500"
+                ? "bg-neutral-400 animate-pulse"
+                : "bg-neutral-600"
           }`}
         />
       )}

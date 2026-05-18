@@ -80,9 +80,9 @@ export default async function LivePage({ searchParams }: PageProps) {
       <header className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
         <div className="flex items-baseline gap-3">
           <h1 className="font-mono text-sm uppercase tracking-widest inline-flex items-center gap-2">
-            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.9)]" />
+            <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-black shadow-[0_0_6px_rgba(0,0,0,0.6)]" />
             <span>
-              <span className="border-b-2 border-amber-400 pb-0.5">Live</span> · SF
+              <span className="border-b-2 border-black pb-0.5">Live</span> · SF
             </span>
           </h1>
           <span className="font-mono text-xs text-neutral-500">

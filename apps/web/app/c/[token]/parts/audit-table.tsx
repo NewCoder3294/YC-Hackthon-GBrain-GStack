@@ -53,7 +53,7 @@ export async function AuditTable({ contributorId }: { contributorId: string }) {
 
   if (error) {
     return (
-      <p className="font-mono text-xs text-rose-600">
+      <p className="font-mono text-xs text-black">
         Audit log unavailable: {error.message}
       </p>
     );
