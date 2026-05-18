@@ -256,6 +256,55 @@ export type LiveIncidentSync = typeof liveIncidentSyncs.$inferSelect;
 export type NewsIncident = typeof newsIncidents.$inferSelect;
 export type NewNewsIncident = typeof newsIncidents.$inferInsert;
 
+/**
+ * env_signals — single-table multi-kind environmental & sensor layer.
+ *
+ * Six (or more) sources share this shape: weather alerts, AQI sensors,
+ * earthquakes, aircraft, vessels, transit advisories. `kind` is the
+ * discriminator; `source` + `source_uid` is the upsert key. The raw
+ * jsonb preserves the original API payload for forensics.
+ *
+ * Read pattern: `WHERE expires_at IS NULL OR expires_at > now()` for
+ * "active" signals, ordered by `occurred_at DESC`. Composite index
+ * `(kind, occurred_at desc)` covers per-layer queries.
+ */
+export const envSignals = pgTable(
+  "env_signals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind", {
+      enum: ["weather", "aqi", "quake", "aircraft", "vessel", "transit"],
+    }).notNull(),
+    source: text("source").notNull(),
+    sourceUid: text("source_uid").notNull(),
+    lat: doublePrecision("lat"),
+    lng: doublePrecision("lng"),
+    severity: text("severity", { enum: ["low", "med", "high"] })
+      .notNull()
+      .default("low"),
+    title: text("title").notNull(),
+    subtitle: text("subtitle"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    ingestedAt: timestamp("ingested_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    raw: jsonb("raw"),
+  },
+  (t) => ({
+    sourceUidUq: uniqueIndex("env_signals_source_source_uid_unique").on(
+      t.source,
+      t.sourceUid,
+    ),
+    kindTimeIdx: index("idx_env_signals_kind_time").on(t.kind, t.occurredAt),
+    sourceIdx: index("idx_env_signals_source").on(t.source),
+  }),
+);
+
+export type EnvSignal = typeof envSignals.$inferSelect;
+export type NewEnvSignal = typeof envSignals.$inferInsert;
+export type EnvSignalKind = NonNullable<EnvSignal["kind"]>;
+
 export const contributors = pgTable("contributors", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
