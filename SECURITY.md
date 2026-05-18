@@ -12,7 +12,7 @@ to the latest `main` branch.
 Use one of the following private channels instead:
 
 - **GitHub Security Advisories** — preferred. Open a draft advisory at
-  https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack/security/advisories/new
+  https://github.com/NewCoder3294/watchdog/security/advisories/new
 - **Email** — `nickpenton07@gmail.com` with subject `[SECURITY] WatchDog: ...`
 
 Please include:

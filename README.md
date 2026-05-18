@@ -2,7 +2,7 @@
 
 Bay Area (CalTrans District 4) CCTV monitoring + incident clipping dashboard.
 
-- **Repo:** https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack
+- **Repo:** https://github.com/NewCoder3294/watchdog
 - **Vercel:** https://vercel.com/worklessteam-9027s-projects/caltrans-cctv
 - **Supabase:** https://supabase.com/dashboard/project/stfxqaocnyhkumapmbjw
 
@@ -48,7 +48,7 @@ packages/sync    CalTrans catalog parser + upsert
 1. **Get added to the Supabase project, GitHub repo, and Vercel project.** Ask Nicolas.
 2. **Clone + install:**
    ```bash
-   git clone https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack.git caltrans-cctv
+   git clone https://github.com/NewCoder3294/watchdog.git caltrans-cctv
    cd caltrans-cctv
    pnpm install
    ```

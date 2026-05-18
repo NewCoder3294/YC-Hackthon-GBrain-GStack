@@ -11,7 +11,7 @@ You'll need **Node ≥ 20**, **pnpm ≥ 9**, and a free **Supabase** project of
 your own (no team access required for OSS contributors).
 
 ```bash
-git clone https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack.git watchdog
+git clone https://github.com/NewCoder3294/watchdog.git watchdog
 cd watchdog
 pnpm install
 cp apps/web/.env.example apps/web/.env.local

@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security report
-    url: https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack/security/advisories/new
+    url: https://github.com/NewCoder3294/watchdog/security/advisories/new
     about: Report a vulnerability privately. Do not open a public issue.
   - name: Question or discussion
-    url: https://github.com/NewCoder3294/YC-Hackthon-GBrain-GStack/discussions
+    url: https://github.com/NewCoder3294/watchdog/discussions
     about: Open-ended questions, ideas, or discussion. Issues are for actionable bugs and features.
