@@ -6,6 +6,7 @@ import { getContributor } from "./_contributor";
 import { CameraList } from "./parts/camera-list";
 import { ActivityList } from "./parts/activity-list";
 import { AuditTable } from "./parts/audit-table";
+import { AuditLiveRefresh } from "./parts/audit-live-refresh";
 import { BridgeStatus } from "./parts/bridge-status";
 import { PolicyEditor } from "./parts/policy-editor";
 import { RemoveButton } from "./parts/remove-button";
@@ -57,7 +58,7 @@ export default async function DashboardPage({
       <Section title="Recent activity">
         <ActivityList contributorId={contributor.id} />
       </Section>
-      <Section title="Audit log">
+      <Section title="Audit log" tail={<AuditLiveRefresh />}>
         <AuditTable contributorId={contributor.id} />
       </Section>
       <Section title="WatchDog app">
@@ -78,11 +79,20 @@ export default async function DashboardPage({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  tail,
+  children,
+}: {
+  title: string;
+  tail?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section>
-      <h2 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-        {title}
+      <h2 className="mb-2 flex items-center font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+        <span>{title}</span>
+        {tail}
       </h2>
       {children}
     </section>
