@@ -18,16 +18,68 @@ const GRID_OPTIONS = [
 
 type StreamFilter = "all" | "hls" | "mjpeg";
 
+type GroupFilter = "all" | "freeway" | "streets" | "live" | "private";
+
+const GROUP_LABEL: Record<GroupFilter, string> = {
+  all: "All",
+  freeway: "Freeway",
+  streets: "Streets",
+  live: "Live cams",
+  private: "Private",
+};
+
+function cameraGroup(
+  source: import("./camera-tile").CameraSource,
+): Exclude<GroupFilter, "all"> {
+  switch (source) {
+    case "caltrans":
+      return "freeway";
+    case "windy":
+      return "live";
+    case "contributor":
+      return "private";
+    case "curated":
+    case "sfmta":
+    case "demo":
+    default:
+      return "streets";
+  }
+}
+
 const PAGE_SIZE = 20;
 
 export function CameraWall({ cameras }: Props) {
   const [grid, setGrid] = useState<(typeof GRID_OPTIONS)[number]>(GRID_OPTIONS[1]);
   const [route, setRoute] = useState<string>("ALL");
   const [stream, setStream] = useState<StreamFilter>("hls");
+  const [group, setGroup] = useState<GroupFilter>("all");
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [hideOffline, setHideOffline] = useState(true);
   const [offlineIds, setOfflineIds] = useState<Set<string>>(() => new Set());
+
+  // Only show group pills for groups that actually have cameras present,
+  // so the toolbar doesn't show empty buckets like "Private" with zero rows.
+  const availableGroups = useMemo<GroupFilter[]>(() => {
+    const present = new Set<Exclude<GroupFilter, "all">>();
+    for (const c of cameras) present.add(cameraGroup(c.source ?? "caltrans"));
+    const ordered: GroupFilter[] = ["freeway", "streets", "live", "private"];
+    return ["all", ...ordered.filter((g) => present.has(g as Exclude<GroupFilter, "all">))];
+  }, [cameras]);
+
+  const groupCounts = useMemo(() => {
+    const map: Record<GroupFilter, number> = {
+      all: cameras.length,
+      freeway: 0,
+      streets: 0,
+      live: 0,
+      private: 0,
+    };
+    for (const c of cameras) {
+      map[cameraGroup(c.source ?? "caltrans")] += 1;
+    }
+    return map;
+  }, [cameras]);
 
   const reportStatus = useCallback((id: string, status: CameraStatus) => {
     setOfflineIds((prev) => {
@@ -58,6 +110,7 @@ export function CameraWall({ cameras }: Props) {
     const q = query.trim().toLowerCase();
     return cameras
       .filter((c) => stream === "all" || c.streamType === stream)
+      .filter((c) => group === "all" || cameraGroup(c.source ?? "caltrans") === group)
       .filter((c) => route === "ALL" || c.route === route)
       .filter(
         (c) =>
@@ -65,7 +118,7 @@ export function CameraWall({ cameras }: Props) {
           c.description.toLowerCase().includes(q) ||
           c.route.toLowerCase().includes(q),
       );
-  }, [cameras, stream, route, query]);
+  }, [cameras, stream, group, route, query]);
 
   // The window of cameras the user has loaded — independent of offline status.
   const pageWindow = useMemo(
@@ -148,6 +201,43 @@ export function CameraWall({ cameras }: Props) {
             ))}
           </div>
         </label>
+
+        {availableGroups.length > 2 && (
+          <label className="flex items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+              Group
+            </span>
+            <div className="flex">
+              {availableGroups.map((opt, i) => (
+                <button
+                  key={opt}
+                  onClick={() => {
+                    setGroup(opt);
+                    setVisibleCount(PAGE_SIZE);
+                  }}
+                  className={cn(
+                    "h-7 border border-neutral-200 px-2 font-mono text-xs uppercase",
+                    group === opt
+                      ? "border-black bg-black text-white"
+                      : "bg-white text-black hover:border-black",
+                    i > 0 && "border-l-0",
+                  )}
+                  title={`${GROUP_LABEL[opt]} · ${groupCounts[opt]}`}
+                >
+                  {GROUP_LABEL[opt]}
+                  <span
+                    className={cn(
+                      "ml-1 text-[9px]",
+                      group === opt ? "text-white/70" : "text-neutral-400",
+                    )}
+                  >
+                    {groupCounts[opt]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </label>
+        )}
 
         <RouteCombobox
           value={route}

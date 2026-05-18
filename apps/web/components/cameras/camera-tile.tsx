@@ -4,6 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import type Hls from "hls.js";
 import { cn } from "@/lib/utils";
 
+export type CameraSource =
+  | "caltrans"
+  | "curated"
+  | "sfmta"
+  | "windy"
+  | "contributor"
+  | "demo";
+
 export interface CameraTileData {
   id: string;
   caltransId: string;
@@ -13,6 +21,7 @@ export interface CameraTileData {
   streamUrl: string;
   streamType: "hls" | "mjpeg" | "iframe";
   isActive: boolean;
+  source?: CameraSource;
 }
 
 export type CameraStatus = "idle" | "loading" | "live" | "offline";

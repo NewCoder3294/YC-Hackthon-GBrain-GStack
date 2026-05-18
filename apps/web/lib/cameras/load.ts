@@ -25,7 +25,15 @@ async function fetchActiveCameras(): Promise<CameraTileData[]> {
   if (error) throw new Error(error.message);
   return (data ?? []).map((c) => {
     // Windy webcams are embeds (player.day URLs), not HLS — render via iframe.
-    const source = (c as { source?: string | null }).source ?? "caltrans";
+    const raw = (c as { source?: string | null }).source;
+    const source: import("@/components/cameras/camera-tile").CameraSource =
+      raw === "curated" ||
+      raw === "sfmta" ||
+      raw === "windy" ||
+      raw === "contributor" ||
+      raw === "demo"
+        ? raw
+        : "caltrans";
     const streamType: "hls" | "mjpeg" | "iframe" =
       source === "windy"
         ? "iframe"
@@ -39,6 +47,7 @@ async function fetchActiveCameras(): Promise<CameraTileData[]> {
       streamUrl: c.stream_url as string,
       streamType,
       isActive: true,
+      source,
     };
   });
 }
