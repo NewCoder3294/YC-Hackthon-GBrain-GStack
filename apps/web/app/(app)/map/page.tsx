@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { loadCameraPins } from "@/lib/cameras/load";
 import { SFMap } from "@/components/map/sf-map";
 import { MapAskBar } from "@/components/map/map-ask-bar";
+import { MapExportButtons } from "@/components/map/map-export-buttons";
 import type { NewsIncidentRow } from "@/components/map/news-panel";
 import { CockpitSidebar } from "@/components/cockpit/cockpit-sidebar";
 import { listLiveIncidents } from "@/app/(app)/(incidents)/live/data";
@@ -86,6 +87,7 @@ export default async function MapPage({ searchParams }: PageProps) {
       <div className="relative min-w-0 flex-1">
         <SFMap cameras={cameras} newsIncidents={newsIncidents} />
         <MapAskBar matchCount={filteredPins.length} />
+        <MapExportButtons />
       </div>
       <CockpitSidebar
         liveIncidents={liveIncidents}
