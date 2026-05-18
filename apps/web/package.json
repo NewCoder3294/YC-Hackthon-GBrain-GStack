@@ -37,6 +37,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0-beta.7",
+    "@types/geojson": "^7946.0.16",
     "@types/mapbox__mapbox-gl-draw": "^1.4.9",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",

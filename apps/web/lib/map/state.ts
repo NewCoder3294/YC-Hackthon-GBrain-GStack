@@ -75,8 +75,8 @@ export function encodeMapState(state: MapState): URLSearchParams {
   return p;
 }
 
-function parseNumber(value: string | null, fallback: number): number {
-  if (!value) return fallback;
+function parseNumber(value: string | null | undefined, fallback: number): number {
+  if (value == null || value === "") return fallback;
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
 }
@@ -92,7 +92,9 @@ export function decodeMapState(params: URLSearchParams): MapState {
 
   const c = params.get("c");
   if (c) {
-    const [lat, lng] = c.split(",").map((s) => parseNumber(s, NaN));
+    const parts = c.split(",");
+    const lat = parseNumber(parts[0], NaN);
+    const lng = parseNumber(parts[1], NaN);
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       state.center = [lng, lat];
     }
