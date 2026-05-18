@@ -18,6 +18,22 @@ const schema = z.object({
   // DataSF Socrata app token — optional, raises rate limit from
   // ~1k/hr to ~10k/hr per IP. Register at https://data.sfgov.org/profile/edit/developer_settings.
   SOCRATA_APP_TOKEN: z.string().min(8).optional(),
+  // PurpleAir AQI sensors — free tier requires an API key.
+  // Request one at https://api.purpleair.com/. Without this the cron
+  // /api/cron/sync-env returns `disabled: true` for the AQI source.
+  PURPLEAIR_API_KEY: z.string().min(8).optional(),
+  // OpenSky Network ADS-B — keyless usage is heavily rate-limited.
+  // Providing HTTP Basic credentials lifts the per-IP cap. Both must be
+  // set together; either alone is ignored.
+  OPENSKY_USERNAME: z.string().min(1).optional(),
+  OPENSKY_PASSWORD: z.string().min(1).optional(),
+  // AISStream.io websocket key — required for the marine vessel layer.
+  // Free tier at https://aisstream.io/. Without it the AIS source
+  // degrades to `disabled: true`.
+  AISSTREAM_API_KEY: z.string().min(8).optional(),
+  // BART BSA — falls back to the documented public sample key if unset.
+  // Set this to your own key for production traffic. https://api.bart.gov/api/register.aspx
+  BART_API_KEY: z.string().min(8).optional(),
 });
 
 const blank = (v: string | undefined) => (v && v.length > 0 ? v : undefined);
@@ -36,4 +52,9 @@ export const env = schema.parse({
   ANTHROPIC_API_KEY: blank(process.env.ANTHROPIC_API_KEY),
   SF_511_API_KEY: blank(process.env.SF_511_API_KEY),
   SOCRATA_APP_TOKEN: blank(process.env.SOCRATA_APP_TOKEN),
+  PURPLEAIR_API_KEY: blank(process.env.PURPLEAIR_API_KEY),
+  OPENSKY_USERNAME: blank(process.env.OPENSKY_USERNAME),
+  OPENSKY_PASSWORD: blank(process.env.OPENSKY_PASSWORD),
+  AISSTREAM_API_KEY: blank(process.env.AISSTREAM_API_KEY),
+  BART_API_KEY: blank(process.env.BART_API_KEY),
 });
