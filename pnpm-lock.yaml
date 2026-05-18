@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.49.8
+        version: 2.105.4
+      tsx:
+        specifier: ^4.19.2
+        version: 4.22.0
       turbo:
         specifier: ^2.1.0
         version: 2.9.14
