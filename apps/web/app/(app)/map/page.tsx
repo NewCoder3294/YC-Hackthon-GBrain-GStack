@@ -11,6 +11,7 @@ import { listLiveIncidents } from "@/app/(app)/(incidents)/live/data";
 import { loadInstability } from "@/lib/cockpit/instability";
 import { loadSFBrief } from "@/lib/cockpit/sf-brief";
 import { loadTrafficDisruptions } from "@/lib/cockpit/traffic-disruptions";
+import { loadEnvSignals } from "@/lib/cockpit/environmental";
 import { attachVerification } from "@/lib/cockpit/verification";
 import { decodeFilter, isFilterEmpty } from "@/lib/map/filter";
 import { loadFilteredIncidents } from "@/lib/map/load";
@@ -45,6 +46,7 @@ export default async function MapPage({ searchParams }: PageProps) {
     instability,
     sfBrief,
     trafficDisruptions,
+    envSignals,
     filteredPins,
     savedViews,
   ] = await Promise.all([
@@ -64,6 +66,7 @@ export default async function MapPage({ searchParams }: PageProps) {
     loadInstability(),
     loadSFBrief(),
     loadTrafficDisruptions(),
+    loadEnvSignals(),
     // Skip the filtered-incident query when no filter is set; saves a
     // roundtrip on every map page load.
     filterIsEmpty
@@ -95,7 +98,11 @@ export default async function MapPage({ searchParams }: PageProps) {
   return (
     <div className="flex" style={{ height: "calc(100vh - 3rem)" }}>
       <div className="relative min-w-0 flex-1">
-        <SFMap cameras={cameras} newsIncidents={newsIncidents} />
+        <SFMap
+          cameras={cameras}
+          newsIncidents={newsIncidents}
+          envSignals={envSignals}
+        />
         <MapAskBar matchCount={filteredPins.length} />
         <MapExportButtons />
         <SavedViewsBar initialViews={savedViews} />
@@ -107,6 +114,7 @@ export default async function MapPage({ searchParams }: PageProps) {
         aggregates={instability.aggregates}
         sfBrief={sfBrief}
         trafficDisruptions={trafficDisruptions}
+        envSignals={envSignals}
       />
     </div>
   );

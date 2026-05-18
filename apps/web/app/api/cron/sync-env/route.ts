@@ -99,8 +99,8 @@ export async function GET(request: NextRequest) {
     runSource("usgs_quakes", () => fetchUsgsQuakes()),
     runSource("adsb_opensky", () =>
       fetchAdsb({
-        username: env.OPENSKY_USERNAME,
-        password: env.OPENSKY_PASSWORD,
+        clientId: env.OPENSKY_CLIENT_ID,
+        clientSecret: env.OPENSKY_CLIENT_SECRET,
       }),
     ),
     runSource("aisstream", () =>
