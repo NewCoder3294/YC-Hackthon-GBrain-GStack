@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { requireDispatcher } from "@/lib/auth/require-dispatcher";
 
 export interface GbrainSearchHit {
@@ -86,8 +87,12 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
   // Write the decision as a reviewed_incident page in the gbrain pages table
   // so it joins the institutional memory layer that gbrain_prior_context queries
   // against. Slug is deterministic per incident → upsert on re-decide.
+  // Uses the service-role admin client because `pages` has no insert RLS
+  // policy for the authenticated role — the gate that matters is
+  // requireDispatcher above.
   try {
-    await writeReviewedIncidentPage(supabase, {
+    const admin = adminClient();
+    await writeReviewedIncidentPage(admin, {
       incidentId: parsed.incidentId,
       outcome: parsed.outcome,
       reason: parsed.reason,
@@ -96,7 +101,7 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
     });
   } catch (e) {
     // Don't let a gbrain write failure block the decision write — the decision
-    // is the source of truth. Just log and move on.
+    // is the source of truth. Just log and surface it on the next response.
     console.error(
       "[recordDecision] gbrain page write failed:",
       e instanceof Error ? e.message : e,
@@ -167,7 +172,9 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
   revalidatePath(`/incidents/${parsed.incidentId}`);
 }
 
-type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type SupabaseClient =
+  | Awaited<ReturnType<typeof createClient>>
+  | ReturnType<typeof adminClient>;
 
 async function writeReviewedIncidentPage(
   supabase: SupabaseClient,

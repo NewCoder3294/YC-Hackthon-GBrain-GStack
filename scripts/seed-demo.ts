@@ -206,22 +206,55 @@ async function upsertPolicy(cameraId: string): Promise<void> {
 async function upsertGbrainPriorPages(): Promise<void> {
   for (let i = 1; i <= 3; i++) {
     const slug = `demo-mission-16th-prior-${i}`;
-    await supabase.from("pages").upsert(
-      {
-        source_id: "watchdog",
-        slug,
-        kind: "reviewed_incident",
-        title: "Mission & 16th — late-night fight detection (dismissed)",
-        body: "Dispatcher reviewed and dismissed: bar-closing crowd, no enforcement action taken.",
-        tags: ["mission-16th", "bar-closing", "dismissed", "fight-detection"],
-        data: {
-          outcome: "dismiss",
-          camera_description: "Mission & 16th HLS",
-          recurrence: i,
+    const compiled = [
+      `**Dispatcher decision:** dismiss`,
+      "",
+      `**Reason:** Bar-closing crowd, recurring false positive (#${i}).`,
+      "",
+      `**Suspect gang:** —`,
+      "",
+      `**Severity:** med`,
+    ].join("\n");
+
+    const { data: page, error } = await supabase
+      .from("pages")
+      .upsert(
+        {
+          source_id: "watchdog",
+          slug,
+          type: "reviewed_incident",
+          page_kind: "markdown",
+          title: "Mission & 16th — late-night fight detection (dismissed)",
+          compiled_truth: compiled,
+          frontmatter: {
+            kind: "reviewed_incident",
+            meta: { reviewer: "demo-seed", decided_at: new Date().toISOString() },
+            source: "derived",
+            samples: null,
+            confidence: null,
+            related_incident_id: null,
+            recurrence: i,
+          },
         },
-      },
-      { onConflict: "source_id,slug" },
-    );
+        { onConflict: "source_id,slug" },
+      )
+      .select("id")
+      .single();
+    if (error || !page) {
+      throw new Error(
+        `pages upsert failed (slug=${slug}): ${error?.message ?? "no row"}`,
+      );
+    }
+
+    await supabase.from("tags").delete().eq("page_id", page.id);
+    const tagRows = [
+      "mission-16th",
+      "bar-closing",
+      "dismissed",
+      "fight-detection",
+    ].map((tag) => ({ page_id: page.id, tag }));
+    const { error: tagErr } = await supabase.from("tags").insert(tagRows);
+    if (tagErr) throw new Error(`tags insert failed: ${tagErr.message}`);
   }
 }
 
