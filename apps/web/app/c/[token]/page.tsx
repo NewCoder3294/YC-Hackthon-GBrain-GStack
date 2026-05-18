@@ -6,6 +6,7 @@ import { getContributor } from "./_contributor";
 import { CameraList } from "./parts/camera-list";
 import { ActivityList } from "./parts/activity-list";
 import { AuditTable } from "./parts/audit-table";
+import { AuditLiveRefresh } from "./parts/audit-live-refresh";
 import { BridgeStatus } from "./parts/bridge-status";
 import { PolicyEditor } from "./parts/policy-editor";
 import { RemoveButton } from "./parts/remove-button";
@@ -26,7 +27,7 @@ export default async function DashboardPage({
     .from("cameras")
     .select("id, caltrans_id, description, lat, lng, stream_type, is_active")
     .eq("contributor_id", contributor.id)
-    .order("created_at", { ascending: true });
+    .order("last_synced_at", { ascending: true });
 
   const noCameras = (cameras ?? []).length === 0;
   const installHref = `/c/${token}/install` as Route;
@@ -57,11 +58,11 @@ export default async function DashboardPage({
       <Section title="Recent activity">
         <ActivityList contributorId={contributor.id} />
       </Section>
-      <Section title="Audit log">
+      <Section title="Audit log" tail={<AuditLiveRefresh />}>
         <AuditTable contributorId={contributor.id} />
       </Section>
       <Section title="WatchDog app">
-        <BridgeStatus contributorId={contributor.id} />
+        <BridgeStatus contributorId={contributor.id} token={token} />
         <p className="mt-3 font-mono text-[10px] uppercase tracking-widest text-neutral-400">
           <Link href={installHref} className="underline-offset-2 hover:underline">
             Pair another phone →
@@ -78,11 +79,20 @@ export default async function DashboardPage({
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  tail,
+  children,
+}: {
+  title: string;
+  tail?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <section>
-      <h2 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
-        {title}
+      <h2 className="mb-2 flex items-center font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+        <span>{title}</span>
+        {tail}
       </h2>
       {children}
     </section>

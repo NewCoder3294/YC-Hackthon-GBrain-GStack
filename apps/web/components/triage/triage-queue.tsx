@@ -12,11 +12,13 @@ interface Props {
 
 const POLL_MS = 15_000;
 
+// Monochrome tiers — priority encoded via weight, fill, and border stroke,
+// never hue (project aesthetic spec).
 const TIER_STYLE: Record<Tier, string> = {
-  P1: "border-red-500 bg-red-50 text-red-700",
-  P2: "border-amber-500 bg-amber-50 text-amber-700",
-  P3: "border-neutral-400 bg-neutral-50 text-neutral-700",
-  P4: "border-neutral-300 bg-white text-neutral-400",
+  P1: "border-2 border-black bg-black text-white font-bold",
+  P2: "border-2 border-black bg-white text-black font-semibold",
+  P3: "border border-neutral-400 bg-neutral-50 text-neutral-800",
+  P4: "border border-neutral-300 bg-white text-neutral-400",
 };
 
 function ageLabel(iso: string): string {

@@ -1,23 +1,24 @@
 import type { Severity } from "./types";
 
+// Monochrome severity ladder — weight, fill, pulse motion. No hue.
 const STYLE: Record<
   Severity,
   { label: string; className: string; dot: string }
 > = {
   low: {
     label: "Low",
-    className: "border-emerald-500 bg-emerald-50 text-emerald-800",
-    dot: "bg-emerald-500",
+    className: "border-neutral-300 bg-white text-neutral-500",
+    dot: "bg-neutral-400",
   },
   med: {
     label: "Med",
-    className: "border-amber-500 bg-amber-50 text-amber-800 font-medium",
-    dot: "bg-amber-400",
+    className: "border-neutral-700 bg-white text-neutral-800 font-medium",
+    dot: "bg-neutral-700",
   },
   high: {
     label: "High",
     className:
-      "border-rose-600 bg-rose-500 text-white font-medium animate-[pulse_2s_ease-in-out_infinite]",
+      "border-black bg-black text-white font-medium animate-[pulse_2s_ease-in-out_infinite]",
     dot: "bg-white",
   },
 };

@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
+import { requireDispatcher } from "@/lib/auth/require-dispatcher";
 
 export interface GbrainSearchHit {
   id: string;
@@ -62,6 +64,8 @@ const decideSchema = z.object({
 });
 
 export async function recordDecision(input: z.infer<typeof decideSchema>) {
+  const dispatcher = await requireDispatcher();
+  if (!dispatcher) throw new Error("forbidden");
   const parsed = decideSchema.parse(input);
   const supabase = await createClient();
   const decidedAt = new Date().toISOString();
@@ -83,8 +87,12 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
   // Write the decision as a reviewed_incident page in the gbrain pages table
   // so it joins the institutional memory layer that gbrain_prior_context queries
   // against. Slug is deterministic per incident → upsert on re-decide.
+  // Uses the service-role admin client because `pages` has no insert RLS
+  // policy for the authenticated role — the gate that matters is
+  // requireDispatcher above.
   try {
-    await writeReviewedIncidentPage(supabase, {
+    const admin = adminClient();
+    await writeReviewedIncidentPage(admin, {
       incidentId: parsed.incidentId,
       outcome: parsed.outcome,
       reason: parsed.reason,
@@ -93,11 +101,70 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
     });
   } catch (e) {
     // Don't let a gbrain write failure block the decision write — the decision
-    // is the source of truth. Just log and move on.
+    // is the source of truth. Just log and surface it on the next response.
     console.error(
       "[recordDecision] gbrain page write failed:",
       e instanceof Error ? e.message : e,
     );
+  }
+
+  // Hold-decision fan-out: request access through the policy enforcer for
+  // every camera linked to this incident via a clip. Each call writes its
+  // own camera_access_events row (allowed or denied) — gives the citizen
+  // an audit trail even when the policy declines. Default basis for an
+  // implicit Hold request is standing_consent; the explicit per-camera UI
+  // in the incident sidebar covers exigent / warrant claims.
+  if (parsed.outcome === "hold") {
+    try {
+      const { data: clipRows } = await supabase
+        .from("clips")
+        .select("camera_id")
+        .eq("incident_id", parsed.incidentId);
+      const uniqueCameras = [
+        ...new Set(
+          (clipRows ?? [])
+            .map((r) => (r as { camera_id: string | null }).camera_id)
+            .filter((id): id is string => !!id),
+        ),
+      ];
+
+      // Idempotency: if a Hold-flavoured audit row already exists for the
+      // (incident, camera) pair, don't re-emit it. Re-deciding Hold on the
+      // same incident is allowed (the dispatcher may revisit) but should
+      // not duplicate the citizen's audit log.
+      const accessedBy = `dispatcher:${parsed.reviewer}`;
+      const { data: existing } = await supabase
+        .from("camera_access_events")
+        .select("camera_id")
+        .eq("incident_id", parsed.incidentId)
+        .eq("accessed_by", accessedBy)
+        .like("reason", "hold:%");
+      const alreadyEmitted = new Set(
+        (existing ?? []).map(
+          (r) => (r as { camera_id: string }).camera_id,
+        ),
+      );
+      const toCall = uniqueCameras.filter((id) => !alreadyEmitted.has(id));
+
+      await Promise.all(
+        toCall.map((cameraId) =>
+          supabase.rpc("request_camera_access", {
+            p_camera_id: cameraId,
+            p_incident_id: parsed.incidentId,
+            p_accessed_by: accessedBy,
+            p_legal_basis: "standing_consent",
+            p_reason: `hold: ${parsed.reason ?? "pending corroboration"}`,
+            p_has_warrant: false,
+            p_is_exigent: false,
+          }),
+        ),
+      );
+    } catch (e) {
+      console.error(
+        "[recordDecision] hold fan-out failed:",
+        e instanceof Error ? e.message : e,
+      );
+    }
   }
 
   revalidatePath("/kg");
@@ -105,7 +172,9 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
   revalidatePath(`/incidents/${parsed.incidentId}`);
 }
 
-type SupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type SupabaseClient =
+  | Awaited<ReturnType<typeof createClient>>
+  | ReturnType<typeof adminClient>;
 
 async function writeReviewedIncidentPage(
   supabase: SupabaseClient,

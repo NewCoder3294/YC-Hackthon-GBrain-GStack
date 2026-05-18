@@ -182,8 +182,8 @@ export function SignalCollapse({
         }}
       >
         <span className="relative flex h-4 w-4">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500/60" />
-          <span className="relative inline-flex h-4 w-4 rounded-full bg-red-600" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-black/40" />
+          <span className="relative inline-flex h-4 w-4 rounded-full bg-black" />
         </span>
       </div>
 
@@ -214,7 +214,7 @@ export function SignalCollapse({
             </div>
           ))}
           <div
-            className="flex items-center gap-2 border-l-2 border-red-500 pl-2"
+            className="flex items-center gap-2 border-l-2 border-black pl-2"
             style={{
               maxHeight: phase === "collapsed" ? 24 : 0,
               opacity: phase === "collapsed" ? 1 : 0,
@@ -224,7 +224,7 @@ export function SignalCollapse({
             <span className="text-neutral-400">
               {fmtTime(incident.earliestSignalAt)}
             </span>
-            <span className="text-red-600">◉</span>
+            <span className="text-black">◉</span>
             <span className="truncate text-neutral-800">
               1 incident · {signals.length} signals fused
             </span>

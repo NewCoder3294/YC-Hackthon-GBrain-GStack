@@ -8,6 +8,7 @@ export function RegistrationForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+1");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [streamUrl, setStreamUrl] = useState("");
@@ -18,15 +19,16 @@ export function RegistrationForm() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    const advancedFilled = showAdvanced && streamUrl && lat && lng;
     const res = await fetch("/api/contribute", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         name,
         contact_phone: phone,
-        lat: Number(lat),
-        lng: Number(lng),
-        stream_url: streamUrl,
+        ...(advancedFilled
+          ? { lat: Number(lat), lng: Number(lng), stream_url: streamUrl }
+          : {}),
       }),
     });
     const json = await res.json();
@@ -49,16 +51,33 @@ export function RegistrationForm() {
         required
         placeholder="+14155551212"
       />
-      <div className="grid grid-cols-2 gap-2">
-        <Field label="Latitude" value={lat} onChange={setLat} required />
-        <Field label="Longitude" value={lng} onChange={setLng} required />
-      </div>
-      <Field
-        label="Stream URL (.m3u8 or .jpg)"
-        value={streamUrl}
-        onChange={setStreamUrl}
-        required
-      />
+      <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+        After SMS verification, install the WatchDog app on a phone at your
+        shop. It auto-discovers your cameras on WiFi — no router config.
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setShowAdvanced((s) => !s)}
+        className="font-mono text-[10px] uppercase tracking-widest text-neutral-500 underline-offset-2 hover:underline"
+      >
+        {showAdvanced ? "Hide" : "Advanced: I already have a public stream URL"}
+      </button>
+
+      {showAdvanced && (
+        <div className="space-y-3 border-l-2 border-neutral-200 pl-3">
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Latitude" value={lat} onChange={setLat} />
+            <Field label="Longitude" value={lng} onChange={setLng} />
+          </div>
+          <Field
+            label="Stream URL (.m3u8 or .jpg)"
+            value={streamUrl}
+            onChange={setStreamUrl}
+          />
+        </div>
+      )}
+
       {error && <p className="font-mono text-xs text-black">{error}</p>}
       <button
         type="submit"

@@ -164,14 +164,15 @@ export function CameraTile({ camera, onStatusChange }: Props) {
     setStatus("live");
   }
 
+  // Camera status — monochrome shape/fill/motion, never hue.
   const dot =
     status === "live"
-      ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]"
+      ? "bg-white shadow-[0_0_4px_rgba(255,255,255,0.9)]"
       : status === "loading"
-        ? "bg-amber-400"
+        ? "bg-neutral-400 animate-pulse"
         : status === "offline"
-          ? "bg-rose-500"
-          : "bg-neutral-300";
+          ? "bg-neutral-700 ring-1 ring-white/40"
+          : "bg-neutral-500";
 
   return (
     <div

@@ -8,11 +8,18 @@ import clsx from "clsx";
 interface Props {
   href: Route;
   label: string;
+  /** Extra path prefixes that count as "active" for this link. Used when a
+   *  single top-level tab fronts a cluster of sibling routes (e.g.
+   *  "Incidents" → /triage + /incidents + /live + /feed). */
+  alsoActiveFor?: string[];
 }
 
-export function NavLink({ href, label }: Props) {
+export function NavLink({ href, label, alsoActiveFor }: Props) {
   const pathname = usePathname();
-  const active = pathname === href || pathname.startsWith(`${href}/`);
+  const matches = [href as string, ...(alsoActiveFor ?? [])];
+  const active = matches.some(
+    (m) => pathname === m || pathname.startsWith(`${m}/`),
+  );
   return (
     <Link
       href={href}

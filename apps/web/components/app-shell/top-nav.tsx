@@ -5,23 +5,40 @@ import { createClient } from "@/lib/supabase/server";
 import { NavLink } from "./nav-link";
 import { ThemeToggle } from "./theme-toggle";
 
-const PUBLIC_LINKS: { href: Route; label: string }[] = [
+// Public surfaces. Map + Live are the OSINT-style read-only views; About
+// is the explainer. Feed stays public — fused signal substrate is the
+// most useful "what's happening" view for a curious SF resident.
+const PUBLIC_LINKS: OperatorLink[] = [
   { href: "/map" as Route, label: "Map" },
   { href: "/live" as Route, label: "Live" },
   { href: "/feed" as Route, label: "Feed" },
   { href: "/about" as Route, label: "About" },
 ];
 
-const OPERATOR_LINKS: { href: Route; label: string }[] = [
+// Operator surfaces collapse to four clusters. Wall + Map are
+// situational awareness; Incidents owns the queue (Triage/Ranked/Live/
+// Feed via the cluster sub-nav); Intel is GBrain + web enrichment. The
+// OpenClaw worker dashboard sits behind a small pip in the header,
+// not in main nav.
+interface OperatorLink {
+  href: Route;
+  label: string;
+  alsoActiveFor?: string[];
+}
+
+const OPERATOR_LINKS: OperatorLink[] = [
   { href: "/wall" as Route, label: "Wall" },
   { href: "/map" as Route, label: "Map" },
-  { href: "/live" as Route, label: "Live" },
-  { href: "/kg" as Route, label: "Knowledge Graph" },
-  { href: "/incidents" as Route, label: "Incidents" },
-  { href: "/triage" as Route, label: "Triage" },
-  { href: "/enrichment" as Route, label: "Web Search" },
-  { href: "/feed" as Route, label: "Feed" },
-  { href: "/openclaw" as Route, label: "NemoClaw" },
+  {
+    href: "/triage" as Route,
+    label: "Incidents",
+    alsoActiveFor: ["/incidents", "/live", "/feed"],
+  },
+  {
+    href: "/kg" as Route,
+    label: "Intel",
+    alsoActiveFor: ["/enrichment"],
+  },
 ];
 
 export async function TopNav() {
@@ -52,10 +69,30 @@ export async function TopNav() {
       </Link>
       <nav className="no-scrollbar flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
         {links.map((l) => (
-          <NavLink key={l.href} href={l.href} label={l.label} />
+          <NavLink
+            key={l.href}
+            href={l.href}
+            label={l.label}
+            {...(l.alsoActiveFor
+              ? { alsoActiveFor: l.alsoActiveFor }
+              : {})}
+          />
         ))}
       </nav>
       <div className="flex shrink-0 items-center gap-2">
+        {user && (
+          <Link
+            href={"/openclaw" as Route}
+            title="NemoClaw worker status"
+            className="hidden h-8 items-center gap-1.5 border border-neutral-300 px-2 font-mono text-[10px] uppercase tracking-widest text-neutral-600 hover:border-black hover:text-black sm:inline-flex"
+          >
+            <span
+              aria-hidden
+              className="inline-block h-1.5 w-1.5 rounded-full bg-black"
+            />
+            NemoClaw
+          </Link>
+        )}
         <ThemeToggle />
         {!user && (
           <Link
