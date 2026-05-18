@@ -13,6 +13,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const cameras = pgTable("cameras", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -32,6 +33,14 @@ export const cameras = pgTable("cameras", {
     .defaultNow(),
   contributorId: uuid("contributor_id").references(() => contributors.id, {
     onDelete: "cascade",
+  }),
+  // Non-null when the camera lives on a contributor's LAN and is reached
+  // via the phone-as-bridge tunnel. Pure-server cameras (Caltrans, public
+  // HLS URLs, vendor-cloud OAuth feeds) leave this null. The HLS proxy
+  // route dispatches on the `bridge://` URL scheme rather than chasing
+  // this FK, so existing read paths stay untouched.
+  bridgeId: uuid("bridge_id").references(() => bridges.id, {
+    onDelete: "set null",
   }),
 });
 
@@ -313,3 +322,111 @@ export const contributorWaitlist = pgTable("contributor_waitlist", {
 
 export type ContributorWaitlistRow = typeof contributorWaitlist.$inferSelect;
 export type NewContributorWaitlistRow = typeof contributorWaitlist.$inferInsert;
+
+// Phone-as-bridge fleet. Each row represents one WatchDog mobile app
+// installation on a phone at the contributor's premises. The bridge
+// maintains an outbound WebSocket to /api/bridge/tunnel and is the only
+// way the server reaches LAN-only ONVIF cameras behind the shop's NAT.
+//
+// Pairing flow:
+//   1. Server creates a row with pairing_code (6-char, 10-min TTL) when the
+//      contributor visits /c/[token]/install.
+//   2. Mobile app prompts for the code, POSTs to /api/bridge/pair, server
+//      issues a long-lived device_token and marks paired_at.
+//   3. App opens a persistent WS, tagging itself with device_token. The
+//      tunnel route updates last_seen_at as a liveness signal.
+//
+// Cameras the bridge discovers via ONVIF land in the `cameras` table with
+// bridge_id set and stream_url = `bridge://{bridge_id}/{onvif_path}` so the
+// existing wall/incident code paths don't need to know the difference —
+// /api/hls dispatches bridge:// URLs through the tunnel.
+export const bridges = pgTable(
+  "bridges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    contributorId: uuid("contributor_id")
+      .notNull()
+      .references(() => contributors.id, { onDelete: "cascade" }),
+    pairingCode: text("pairing_code"),
+    pairingExpiresAt: timestamp("pairing_expires_at", { withTimezone: true }),
+    pairedAt: timestamp("paired_at", { withTimezone: true }),
+    deviceToken: text("device_token").unique(),
+    platform: text("platform", {
+      enum: ["ios", "android", "docker", "unknown"],
+    })
+      .notNull()
+      .default("unknown"),
+    appVersion: text("app_version"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+  },
+  (t) => ({
+    contributorIdx: index("bridges_contributor_idx").on(t.contributorId),
+    pairingCodeIdx: uniqueIndex("bridges_pairing_code_idx").on(t.pairingCode),
+  }),
+);
+
+export type Bridge = typeof bridges.$inferSelect;
+export type NewBridge = typeof bridges.$inferInsert;
+
+// Policy-as-code: per-camera homeowner policy + the append-only audit log
+// every request_camera_access call writes. See migration 0008 for the RPC.
+export const cameraPolicies = pgTable("camera_policies", {
+  cameraId: uuid("camera_id")
+    .primaryKey()
+    .references(() => cameras.id, { onDelete: "cascade" }),
+  geofenceRadiusM: integer("geofence_radius_m").notNull(),
+  windowStartLocal: text("window_start_local"),
+  windowEndLocal: text("window_end_local"),
+  warrantRequired: boolean("warrant_required").notNull().default(false),
+  exigentAllowed: boolean("exigent_allowed").notNull().default(true),
+  blockedIncidentTypes: text("blocked_incident_types")
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const cameraAccessEvents = pgTable(
+  "camera_access_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cameraId: uuid("camera_id")
+      .notNull()
+      .references(() => cameras.id, { onDelete: "cascade" }),
+    contributorId: uuid("contributor_id").references(() => contributors.id, {
+      onDelete: "set null",
+    }),
+    incidentId: uuid("incident_id").references(() => incidents.id, {
+      onDelete: "set null",
+    }),
+    accessedBy: text("accessed_by").notNull(),
+    legalBasis: text("legal_basis", {
+      enum: ["standing_consent", "exigent", "warrant", "public_domain"],
+    }).notNull(),
+    reason: text("reason"),
+    allowed: boolean("allowed").notNull(),
+    denialReason: text("denial_reason"),
+    policySnapshot: jsonb("policy_snapshot"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    cameraTimeIdx: index("camera_access_events_camera_time_idx").on(
+      t.cameraId,
+      t.occurredAt.desc(),
+    ),
+    incidentIdx: index("camera_access_events_incident_idx").on(t.incidentId),
+  }),
+);
+
+export type CameraPolicy = typeof cameraPolicies.$inferSelect;
+export type NewCameraPolicy = typeof cameraPolicies.$inferInsert;
+export type CameraAccessEvent = typeof cameraAccessEvents.$inferSelect;
+export type NewCameraAccessEvent = typeof cameraAccessEvents.$inferInsert;
