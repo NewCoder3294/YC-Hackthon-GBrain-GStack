@@ -1,0 +1,4 @@
+# Default owner for everything in the repo. Add more specific rules below
+# when sub-areas grow stewards. Last matching rule wins.
+
+* @NewCoder3294
