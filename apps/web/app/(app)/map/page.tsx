@@ -3,6 +3,8 @@ import { loadCameraPins } from "@/lib/cameras/load";
 import { SFMap } from "@/components/map/sf-map";
 import { MapAskBar } from "@/components/map/map-ask-bar";
 import { MapExportButtons } from "@/components/map/map-export-buttons";
+import { SavedViewsBar } from "@/components/map/saved-views-bar";
+import { listSavedViews } from "@/app/(app)/map/views-actions";
 import type { NewsIncidentRow } from "@/components/map/news-panel";
 import { CockpitSidebar } from "@/components/cockpit/cockpit-sidebar";
 import { listLiveIncidents } from "@/app/(app)/(incidents)/live/data";
@@ -44,6 +46,7 @@ export default async function MapPage({ searchParams }: PageProps) {
     sfBrief,
     trafficDisruptions,
     filteredPins,
+    savedViews,
   ] = await Promise.all([
     loadCameraPins(),
     supabase
@@ -66,6 +69,7 @@ export default async function MapPage({ searchParams }: PageProps) {
     filterIsEmpty
       ? Promise.resolve([])
       : loadFilteredIncidents(filter),
+    listSavedViews(),
   ]);
 
   // Best-effort cross-source corroboration badges on the Live Feed.
@@ -94,6 +98,7 @@ export default async function MapPage({ searchParams }: PageProps) {
         <SFMap cameras={cameras} newsIncidents={newsIncidents} />
         <MapAskBar matchCount={filteredPins.length} />
         <MapExportButtons />
+        <SavedViewsBar initialViews={savedViews} />
       </div>
       <CockpitSidebar
         liveIncidents={liveIncidents}
