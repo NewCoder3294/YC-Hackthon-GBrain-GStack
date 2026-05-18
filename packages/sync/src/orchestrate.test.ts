@@ -33,6 +33,12 @@ vi.mock("./sources/transit-511", () => ({
     .mockResolvedValue({ rows: [], highWaterMark: null }),
   TRANSIT_511_SOURCE: "511_transit",
 }));
+vi.mock("./sources/pge-outages", () => ({
+  fetchPGEOutages: vi
+    .fn()
+    .mockResolvedValue({ rows: [], highWaterMark: null }),
+  PGE_OUTAGES_SOURCE: "pge_outages",
+}));
 
 // Tiny db that records mutations and lets us seed prior sync state.
 function buildMockDb(priorSyncs: Record<string, { lastRunAt: Date; lastHighWaterMark: Date | null }> = {}) {
