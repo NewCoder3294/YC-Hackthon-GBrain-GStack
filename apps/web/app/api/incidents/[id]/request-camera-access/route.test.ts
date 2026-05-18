@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const getUser = vi.fn();
-const adminRpc = vi.fn();
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ auth: { getUser } }),
+const { requireDispatcher, adminRpc } = vi.hoisted(() => ({
+  requireDispatcher: vi.fn(),
+  adminRpc: vi.fn(),
 }));
+
+vi.mock("@/lib/auth/require-dispatcher", () => ({ requireDispatcher }));
 vi.mock("@/lib/supabase/admin", () => ({
   adminClient: () => ({ rpc: adminRpc }),
 }));
@@ -25,21 +25,21 @@ function makeReq(body: unknown) {
 
 describe("POST /api/incidents/[id]/request-camera-access", () => {
   beforeEach(() => {
-    getUser.mockReset();
+    requireDispatcher.mockReset();
     adminRpc.mockReset();
   });
 
-  it("401 when not signed in", async () => {
-    getUser.mockResolvedValue({ data: { user: null } });
+  it("403 when not a dispatcher", async () => {
+    requireDispatcher.mockResolvedValue(null);
     const res = await POST(
       makeReq({}) as never,
       { params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000000" }) },
     );
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
   });
 
   it("400 when body invalid", async () => {
-    getUser.mockResolvedValue({ data: { user: { email: "d@x", id: "u1" } } });
+    requireDispatcher.mockResolvedValue({ id: "u1", email: "d@x" });
     const res = await POST(
       makeReq({ cameraId: "not-a-uuid" }) as never,
       { params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000000" }) },
@@ -47,8 +47,8 @@ describe("POST /api/incidents/[id]/request-camera-access", () => {
     expect(res.status).toBe(400);
   });
 
-  it("forwards to RPC with dispatcher: prefix and returns its result", async () => {
-    getUser.mockResolvedValue({ data: { user: { email: "d@x", id: "u1" } } });
+  it("forwards to RPC and derives privileged flags from legalBasis", async () => {
+    requireDispatcher.mockResolvedValue({ id: "u1", email: "d@x" });
     adminRpc.mockResolvedValue({
       data: [
         {
@@ -63,21 +63,21 @@ describe("POST /api/incidents/[id]/request-camera-access", () => {
     const res = await POST(
       makeReq({
         cameraId: "11111111-1111-1111-1111-111111111111",
-        legalBasis: "standing_consent",
-        reason: "test",
+        legalBasis: "warrant",
+        reason: "warrant served at 2026-05-18 0830 PST",
       }) as never,
       { params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000000" }) },
     );
     expect(res.status).toBe(200);
-    const json = await res.json();
-    expect(json.allowed).toBe(true);
     expect(adminRpc).toHaveBeenCalledWith(
       "request_camera_access",
       expect.objectContaining({
         p_camera_id: "11111111-1111-1111-1111-111111111111",
         p_incident_id: "00000000-0000-0000-0000-000000000000",
         p_accessed_by: "dispatcher:d@x",
-        p_legal_basis: "standing_consent",
+        p_legal_basis: "warrant",
+        p_has_warrant: true,
+        p_is_exigent: false,
       }),
     );
   });

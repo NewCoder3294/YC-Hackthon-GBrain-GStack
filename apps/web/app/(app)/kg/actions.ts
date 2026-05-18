@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { requireDispatcher } from "@/lib/auth/require-dispatcher";
 
 export interface GbrainSearchHit {
   id: string;
@@ -62,6 +63,8 @@ const decideSchema = z.object({
 });
 
 export async function recordDecision(input: z.infer<typeof decideSchema>) {
+  const dispatcher = await requireDispatcher();
+  if (!dispatcher) throw new Error("forbidden");
   const parsed = decideSchema.parse(input);
   const supabase = await createClient();
   const decidedAt = new Date().toISOString();

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
 import { adminClient } from "@/lib/supabase/admin";
+import { requireDispatcher } from "@/lib/auth/require-dispatcher";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,12 +25,9 @@ export async function POST(
   }
   const incidentId = parsedParams.data.id;
 
-  const supaUser = await createClient();
-  const {
-    data: { user },
-  } = await supaUser.auth.getUser();
+  const user = await requireDispatcher();
   if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const json = await req.json().catch(() => null);

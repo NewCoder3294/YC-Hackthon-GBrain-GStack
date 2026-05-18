@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const getUser = vi.fn();
-const adminRpc = vi.fn();
-
-vi.mock("@/lib/supabase/server", () => ({
-  createClient: async () => ({ auth: { getUser } }),
+const { requireDispatcher, adminRpc } = vi.hoisted(() => ({
+  requireDispatcher: vi.fn(),
+  adminRpc: vi.fn(),
 }));
+
+vi.mock("@/lib/auth/require-dispatcher", () => ({ requireDispatcher }));
 vi.mock("@/lib/supabase/admin", () => ({
   adminClient: () => ({ rpc: adminRpc }),
 }));
@@ -25,12 +25,12 @@ function makeReq(body: unknown) {
 
 describe("POST /api/cameras/[id]/request-access", () => {
   beforeEach(() => {
-    getUser.mockReset();
+    requireDispatcher.mockReset();
     adminRpc.mockReset();
   });
 
-  it("401 when not signed in", async () => {
-    getUser.mockResolvedValue({ data: { user: null } });
+  it("403 when not a dispatcher", async () => {
+    requireDispatcher.mockResolvedValue(null);
     const res = await POST(
       makeReq({}) as never,
       {
@@ -39,11 +39,11 @@ describe("POST /api/cameras/[id]/request-access", () => {
         }),
       },
     );
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(403);
   });
 
   it("calls RPC with null incident", async () => {
-    getUser.mockResolvedValue({ data: { user: { email: "d@x", id: "u1" } } });
+    requireDispatcher.mockResolvedValue({ id: "u1", email: "d@x" });
     adminRpc.mockResolvedValue({
       data: [
         {
