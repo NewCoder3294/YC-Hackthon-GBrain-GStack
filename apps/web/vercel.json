@@ -5,6 +5,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/sync-curated-cameras",
+      "schedule": "0 3 * * *"
+    },
+    {
       "path": "/api/cron/enrich-incidents",
       "schedule": "0 0,12 * * *"
     },
