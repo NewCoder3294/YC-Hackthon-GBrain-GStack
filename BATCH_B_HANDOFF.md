@@ -254,14 +254,27 @@ disabled (missing key); **207** when at least one source threw.
    idempotently. If BART changes their `posted` formatting between
    polls a row will look new each time. Acceptable while volume is
    small (≤ a dozen rows/day across all advisories).
-5. The three shared-file edits (page / sidebar / sf-map) are documented
-   above but were not committed — see "Wiring still required".
+5. ~~The three shared-file edits (page / sidebar / sf-map) are documented
+   above but were not committed — see "Wiring still required".~~
+   **Resolved in commit `7382d2f`.** Page, cockpit sidebar, and sf-map
+   now wire envSignals end-to-end; the Env layer toggle and marker pins
+   are live on `/map`.
+
+## Resolution (added after merge)
+
+| commit | what landed |
+|---|---|
+| `6ed7edc` | OpenSky migrated to OAuth2 client credentials. `OPENSKY_USERNAME`/`OPENSKY_PASSWORD` renamed to `OPENSKY_CLIENT_ID`/`OPENSKY_CLIENT_SECRET`. `adsb.ts` now exchanges them for a bearer token at `auth.opensky-network.org/.../openid-connect/token` and caches the token for its TTL. New OAuth2 test added (73/73 sync). |
+| `7382d2f` | Shared-file wiring: `map/page.tsx` calls `loadEnvSignals()` and passes envSignals to both SFMap and CockpitSidebar. CockpitSidebar registers EnvironmentalPanel widget. `sf-map.tsx` adds an `envMarkersRef` diff-and-sync useEffect mirroring news markers, plus an `Env` LayerToggle and per-kind/per-severity styled-jsx CSS. Per-kind toggles remain Batch C's scope. |
+
+After this resolution: web typecheck clean, sync typecheck clean, db
+typecheck clean, sync **73/73**, web **70/70**.
 
 ## Three-line summary
 
 This batch adds the `env_signals` table + six free-tier OSINT
 sources (NWS, PurpleAir, USGS, OpenSky, AISStream, BART/MTA) plus a
-fan-out cron, a cached loader, and a cockpit panel. All committed on
-`feat/batch-b-env`. The single-table-multi-kind shape lets future
-sources (tide, lightning, satellite passes) drop in without schema
-churn, and tests stay green at 72/72 for sync + 70/70 for web.
+fan-out cron, a cached loader, a cockpit panel, an Env layer on the
+map, and OAuth2 auth for OpenSky. All committed on `feat/batch-b-env`.
+The single-table-multi-kind shape lets future sources (tide, lightning,
+satellite passes) drop in without schema churn.
