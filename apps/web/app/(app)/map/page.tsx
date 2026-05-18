@@ -3,7 +3,7 @@ import { loadCameraPins } from "@/lib/cameras/load";
 import { SFMap } from "@/components/map/sf-map";
 import type { NewsIncidentRow } from "@/components/map/news-panel";
 import { CockpitSidebar } from "@/components/cockpit/cockpit-sidebar";
-import { listLiveIncidents } from "../live/data";
+import { listLiveIncidents } from "@/app/(app)/(incidents)/live/data";
 
 export const revalidate = 60;
 export const dynamic = "force-dynamic";

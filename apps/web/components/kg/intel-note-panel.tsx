@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { writeIntelNote } from "@/app/(app)/kg/actions";
+import { writeIntelNote } from "@/app/(app)/(intel)/kg/actions";
 
 interface Props {
   relatedIncidentId?: string | null;

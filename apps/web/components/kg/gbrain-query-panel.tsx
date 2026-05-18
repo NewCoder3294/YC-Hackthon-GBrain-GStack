@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { searchGbrain, type GbrainSearchHit } from "@/app/(app)/kg/actions";
+import { searchGbrain, type GbrainSearchHit } from "@/app/(app)/(intel)/kg/actions";
 import { cn } from "@/lib/utils";
 import type { KgEdge, KgNode, KgNodeKind } from "./types";
 import { KIND_LABEL } from "./types";

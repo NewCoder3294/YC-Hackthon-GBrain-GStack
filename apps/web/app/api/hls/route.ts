@@ -1,6 +1,22 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getRedis } from "@/lib/cache/redis";
-import { parseBridgeStreamUrl } from "@/lib/contribute/bridge-protocol";
+
+// Inlined: the LAN-tunnel bridge feature ships in a separate branch and
+// owns lib/contribute/bridge-protocol.ts. Inline the tiny parser here so
+// the bridge:// dispatch path doesn't require a missing import; when the
+// full bridge module lands, swap back to the shared parser.
+function parseBridgeStreamUrl(
+  url: string,
+): { bridgeId: string; onvifPath: string } | null {
+  if (!url.startsWith("bridge://")) return null;
+  const rest = url.slice("bridge://".length);
+  const slash = rest.indexOf("/");
+  if (slash <= 0) return null;
+  const bridgeId = rest.slice(0, slash);
+  const onvifPath = rest.slice(slash + 1);
+  if (!bridgeId || !onvifPath) return null;
+  return { bridgeId, onvifPath };
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
