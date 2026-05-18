@@ -26,7 +26,7 @@ export default async function DashboardPage({
     .from("cameras")
     .select("id, caltrans_id, description, lat, lng, stream_type, is_active")
     .eq("contributor_id", contributor.id)
-    .order("created_at", { ascending: true });
+    .order("last_synced_at", { ascending: true });
 
   const noCameras = (cameras ?? []).length === 0;
   const installHref = `/c/${token}/install` as Route;
@@ -61,7 +61,7 @@ export default async function DashboardPage({
         <AuditTable contributorId={contributor.id} />
       </Section>
       <Section title="WatchDog app">
-        <BridgeStatus contributorId={contributor.id} />
+        <BridgeStatus contributorId={contributor.id} token={token} />
         <p className="mt-3 font-mono text-[10px] uppercase tracking-widest text-neutral-400">
           <Link href={installHref} className="underline-offset-2 hover:underline">
             Pair another phone →
