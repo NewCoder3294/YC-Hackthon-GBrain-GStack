@@ -10,7 +10,9 @@ export default function ContributePage() {
           WatchDog · OpenContribution
         </h1>
         <p className="mt-2 font-mono text-xs text-neutral-500">
-          Register a camera. We text you a 6-digit code; your feed goes live after you confirm.
+          Use the cameras you already have. We text you a verification code,
+          then walk you through pairing them via the WatchDog app — no router
+          config, no port forwarding.
         </p>
         <div className="mt-6">
           <RegistrationForm />

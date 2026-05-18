@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { acknowledgeAlert } from "@/app/(app)/kg/actions";
+import { acknowledgeAlert } from "@/app/(app)/(intel)/kg/actions";
 
 interface Props {
   alertId: string;

@@ -187,7 +187,7 @@ export function AlertsSignupForm() {
       </fieldset>
 
       {status === "error" && (
-        <p className="font-mono text-xs text-rose-600">
+        <p className="font-mono text-xs text-black">
           Sign-up failed: {error ?? "unknown error"}. Try again in a minute.
         </p>
       )}

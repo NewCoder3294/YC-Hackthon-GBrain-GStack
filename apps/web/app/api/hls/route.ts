@@ -1,6 +1,23 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getRedis } from "@/lib/cache/redis";
 
+// Inlined: the LAN-tunnel bridge feature ships in a separate branch and
+// owns lib/contribute/bridge-protocol.ts. Inline the tiny parser here so
+// the bridge:// dispatch path doesn't require a missing import; when the
+// full bridge module lands, swap back to the shared parser.
+function parseBridgeStreamUrl(
+  url: string,
+): { bridgeId: string; onvifPath: string } | null {
+  if (!url.startsWith("bridge://")) return null;
+  const rest = url.slice("bridge://".length);
+  const slash = rest.indexOf("/");
+  if (slash <= 0) return null;
+  const bridgeId = rest.slice(0, slash);
+  const onvifPath = rest.slice(slash + 1);
+  if (!bridgeId || !onvifPath) return null;
+  return { bridgeId, onvifPath };
+}
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -184,6 +201,55 @@ async function fetchSegment(
   }
 }
 
+// Contributor cameras live on a LAN behind their shop's NAT. Their stream
+// URL is recorded as `bridge://{bridge_id}/{onvif_path}` — this route
+// recognizes that scheme and proxies through the bridge tunnel service.
+// The tunnel itself runs out-of-band (persistent WebSocket relays aren't
+// a Vercel-function workload); BRIDGE_TUNNEL_URL points at it. When the
+// env is unset, return 503 with a clear body so the wall UI can render
+// "Camera offline" rather than crashing.
+async function dispatchBridge(target: URL): Promise<Response> {
+  const tunnelBase = process.env.BRIDGE_TUNNEL_URL;
+  if (!tunnelBase) {
+    return NextResponse.json(
+      { error: "bridge_tunnel_not_configured" },
+      { status: 503 },
+    );
+  }
+  // bridge://<bridge_id>/<onvif_path>  →  <tunnel>/relay/<bridge_id>/<onvif_path>
+  const parsed = parseBridgeStreamUrl(target.toString());
+  if (!parsed) {
+    return NextResponse.json(
+      { error: "invalid_bridge_url" },
+      { status: 400 },
+    );
+  }
+  const relay = new URL(
+    `/relay/${encodeURIComponent(parsed.bridgeId)}/${parsed.onvifPath}`,
+    tunnelBase,
+  );
+
+  const upstream = await fetch(relay.toString(), {
+    headers: {
+      accept: "*/*",
+      "x-bridge-auth": process.env.BRIDGE_TUNNEL_SECRET ?? "",
+    },
+    cache: "no-store",
+  });
+  if (!upstream.ok || !upstream.body) {
+    return NextResponse.json(
+      { error: `tunnel ${upstream.status}` },
+      { status: upstream.status || 502 },
+    );
+  }
+  const headers = new Headers();
+  headers.set("access-control-allow-origin", "*");
+  const ct = upstream.headers.get("content-type");
+  if (ct) headers.set("content-type", ct);
+  headers.set("cache-control", "no-store");
+  return new NextResponse(upstream.body, { status: 200, headers });
+}
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get("url");
   if (!url) {
@@ -195,6 +261,12 @@ export async function GET(request: NextRequest) {
     target = new URL(url);
   } catch {
     return NextResponse.json({ error: "invalid url" }, { status: 400 });
+  }
+
+  // Contributor cameras (phone-as-bridge path) come in as bridge:// URLs.
+  // Hand off to the tunnel before the public-host allowlist runs.
+  if (target.protocol === "bridge:") {
+    return dispatchBridge(target);
   }
 
   if (!isAllowed(target)) {

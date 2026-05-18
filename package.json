@@ -9,9 +9,12 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "db:generate": "pnpm --filter @caltrans/db generate",
-    "db:migrate": "pnpm --filter @caltrans/db migrate"
+    "db:migrate": "pnpm --filter @caltrans/db migrate",
+    "seed:demo": "tsx scripts/seed-demo.ts"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "tsx": "^4.19.2",
     "turbo": "^2.1.0",
     "typescript": "^5.6.0"
   }

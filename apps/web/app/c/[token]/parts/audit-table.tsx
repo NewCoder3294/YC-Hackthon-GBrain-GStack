@@ -8,12 +8,21 @@ interface AccessEvent {
   reason: string | null;
   incident_id: string | null;
   camera_id: string;
+  allowed: boolean;
+  denial_reason: string | null;
 }
 
 const BASIS_LABELS: Record<string, string> = {
   standing_consent: "standing consent",
   exigent: "exigent",
   warrant: "warrant",
+  public_domain: "public",
+};
+
+const DENIAL_LABELS: Record<string, string> = {
+  warrant_required: "warrant required",
+  blocked_incident_type: "blocked incident type",
+  outside_time_window: "outside allowed hours",
 };
 
 function formatTimestamp(iso: string): string {
@@ -36,7 +45,7 @@ export async function AuditTable({ contributorId }: { contributorId: string }) {
   const { data, error } = await supabase
     .from("camera_access_events")
     .select(
-      "id, occurred_at, accessed_by, legal_basis, reason, incident_id, camera_id",
+      "id, occurred_at, accessed_by, legal_basis, reason, incident_id, camera_id, allowed, denial_reason",
     )
     .in("camera_id", ids)
     .order("occurred_at", { ascending: false })
@@ -44,7 +53,7 @@ export async function AuditTable({ contributorId }: { contributorId: string }) {
 
   if (error) {
     return (
-      <p className="font-mono text-xs text-rose-600">
+      <p className="font-mono text-xs text-black">
         Audit log unavailable: {error.message}
       </p>
     );
@@ -75,6 +84,7 @@ export async function AuditTable({ contributorId }: { contributorId: string }) {
             <th className="px-3 py-2 font-normal">When</th>
             <th className="px-3 py-2 font-normal">Who</th>
             <th className="px-3 py-2 font-normal">Basis</th>
+            <th className="px-3 py-2 font-normal">Status</th>
             <th className="px-3 py-2 font-normal">Reason</th>
             <th className="px-3 py-2 font-normal">Incident</th>
           </tr>
@@ -98,6 +108,17 @@ export async function AuditTable({ contributorId }: { contributorId: string }) {
                 >
                   {BASIS_LABELS[e.legal_basis] ?? e.legal_basis}
                 </span>
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap">
+                {e.allowed ? (
+                  <span className="border border-neutral-300 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-neutral-600">
+                    allowed
+                  </span>
+                ) : (
+                  <span className="border border-black bg-white px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-black">
+                    denied · {DENIAL_LABELS[e.denial_reason ?? ""] ?? e.denial_reason ?? "policy"}
+                  </span>
+                )}
               </td>
               <td className="px-3 py-2 text-neutral-600">{e.reason ?? "—"}</td>
               <td className="px-3 py-2 text-neutral-500">
