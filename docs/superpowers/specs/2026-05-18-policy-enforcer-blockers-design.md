@@ -184,13 +184,19 @@ BEGIN
     IF FOUND THEN
       v_snapshot := to_jsonb(v_pol);
 
-      -- 1. Blocked incident types (homeowner's hardest veto)
-      IF p_incident_id IS NOT NULL THEN
-        SELECT lower(coalesce(category, type)) INTO v_inc_type
-          FROM incidents WHERE id = p_incident_id;
-        IF v_inc_type = ANY(v_pol.blocked_incident_types) THEN
-          v_allowed := false;
-          v_denial  := 'blocked_incident_type';
+      -- 1. Blocked incident types (homeowner's hardest veto).
+      -- incidents has no category column today; the homeowner UI accepts
+      -- free-form keywords, so match case-insensitively against the title.
+      IF p_incident_id IS NOT NULL AND array_length(v_pol.blocked_incident_types, 1) > 0 THEN
+        SELECT lower(title) INTO v_inc_type FROM incidents WHERE id = p_incident_id;
+        IF v_inc_type IS NOT NULL THEN
+          IF EXISTS (
+            SELECT 1 FROM unnest(v_pol.blocked_incident_types) AS kw
+            WHERE v_inc_type LIKE '%' || lower(kw) || '%'
+          ) THEN
+            v_allowed := false;
+            v_denial  := 'blocked_incident_type';
+          END IF;
         END IF;
       END IF;
 
@@ -273,8 +279,9 @@ Adds two sidebar sections under the existing "Prior Context" block:
 ```
 
 `linkedCameras` is derived server-side from
-`signal_events.where(incident_id).select('camera_id').distinct` joined to
-`cameras`. `user.email` comes from the existing Supabase server session
+`clips.where(incident_id).select('camera_id').distinct` joined to
+`cameras`. (`signal_events` does not carry a direct incident FK — clips is
+the join.) `user.email` comes from the existing Supabase server session
 helper.
 
 `CameraAccessRow` is a small client component:
@@ -294,10 +301,9 @@ call, before the `revalidatePath` block:
 ```ts
 if (parsed.outcome === "hold") {
   const { data: cams } = await supabase
-    .from("signal_events")
+    .from("clips")
     .select("camera_id")
-    .eq("incident_id", parsed.incidentId)
-    .not("camera_id", "is", null);
+    .eq("incident_id", parsed.incidentId);
 
   const uniqueCameras = [...new Set((cams ?? []).map(c => c.camera_id as string))];
   await Promise.all(uniqueCameras.map(cameraId =>
