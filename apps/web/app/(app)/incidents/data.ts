@@ -20,11 +20,13 @@ interface ClipRow {
   thumbnail_path: string;
   storage_path: string;
   cameras: {
+    id: string;
     route: string;
     direction: string | null;
     description: string;
     stream_url: string;
     stream_type: "hls" | "mjpeg";
+    contributor_id: string | null;
   } | null;
   clip_tags: { tag: string }[];
 }
@@ -39,7 +41,7 @@ interface IncidentResponse {
 }
 
 const CLIP_SELECT =
-  "id, camera_id, started_at, duration_s, thumbnail_path, storage_path, cameras (route, direction, description, stream_url, stream_type), clip_tags (tag)";
+  "id, camera_id, started_at, duration_s, thumbnail_path, storage_path, cameras (id, route, direction, description, stream_url, stream_type, contributor_id), clip_tags (tag)";
 
 function toClip(c: ClipRow) {
   return {
@@ -51,11 +53,13 @@ function toClip(c: ClipRow) {
     storagePath: c.storage_path,
     camera: c.cameras
       ? {
+          id: c.cameras.id,
           route: c.cameras.route,
           direction: c.cameras.direction,
           description: c.cameras.description,
           streamUrl: c.cameras.stream_url,
           streamType: c.cameras.stream_type,
+          contributorId: c.cameras.contributor_id,
         }
       : null,
     tags: c.clip_tags.map((t) => t.tag),

@@ -14,11 +14,13 @@ export interface IncidentRow {
     thumbnailPath: string;
     storagePath: string;
     camera: {
+      id: string;
       route: string;
       direction: string | null;
       description: string;
       streamUrl: string;
       streamType: "hls" | "mjpeg";
+      contributorId: string | null;
     } | null;
     tags: string[];
   } | null;
