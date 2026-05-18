@@ -4,6 +4,8 @@ import { SFMap } from "@/components/map/sf-map";
 import type { NewsIncidentRow } from "@/components/map/news-panel";
 import { CockpitSidebar } from "@/components/cockpit/cockpit-sidebar";
 import { listLiveIncidents } from "@/app/(app)/(incidents)/live/data";
+import { loadInstability } from "@/lib/cockpit/instability";
+import { loadSFBrief } from "@/lib/cockpit/sf-brief";
 
 export const revalidate = 60;
 export const dynamic = "force-dynamic";
@@ -17,7 +19,7 @@ export default async function MapPage() {
   // is RLS-readable by anon already. Live incidents drive the Live Feed
   // panel in the cockpit sidebar.
   const supabase = await createClient();
-  const [cameras, newsRes, liveIncidents] = await Promise.all([
+  const [cameras, newsRes, liveIncidents, instability, sfBrief] = await Promise.all([
     loadCameraPins(),
     supabase
       .from("news_incidents")
@@ -31,6 +33,8 @@ export default async function MapPage() {
       .order("published_at", { ascending: false })
       .limit(500),
     listLiveIncidents({ unacknowledgedOnly: true }),
+    loadInstability(),
+    loadSFBrief(),
   ]);
 
   const newsIncidents: NewsIncidentRow[] = (newsRes.data ?? []).map((n) => ({
@@ -53,7 +57,13 @@ export default async function MapPage() {
       <div className="relative min-w-0 flex-1">
         <SFMap cameras={cameras} newsIncidents={newsIncidents} />
       </div>
-      <CockpitSidebar liveIncidents={liveIncidents} />
+      <CockpitSidebar
+        liveIncidents={liveIncidents}
+        instabilityRanking={instability.ranking}
+        cityRisk={instability.city}
+        aggregates={instability.aggregates}
+        sfBrief={sfBrief}
+      />
     </div>
   );
 }
