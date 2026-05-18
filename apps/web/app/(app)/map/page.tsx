@@ -2,28 +2,35 @@ import { createClient } from "@/lib/supabase/server";
 import { loadCameraPins } from "@/lib/cameras/load";
 import { SFMap } from "@/components/map/sf-map";
 import type { NewsIncidentRow } from "@/components/map/news-panel";
+import { CockpitSidebar } from "@/components/cockpit/cockpit-sidebar";
+import { listLiveIncidents } from "../live/data";
 
 export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 // SF city bbox for the news layer.
-const SF_BBOX = { minLat: 37.70, maxLat: 37.84, minLng: -122.52, maxLng: -122.35 };
+const SF_BBOX = { minLat: 37.7, maxLat: 37.84, minLng: -122.52, maxLng: -122.35 };
 
 export default async function MapPage() {
   // Cameras come from the cached service-role loader so anon visitors get
   // the same Bay-Area-wide layer as logged-in operators. The news layer
-  // is RLS-readable by anon already.
+  // is RLS-readable by anon already. Live incidents drive the Live Feed
+  // panel in the cockpit sidebar.
   const supabase = await createClient();
-  const [cameras, newsRes] = await Promise.all([
+  const [cameras, newsRes, liveIncidents] = await Promise.all([
     loadCameraPins(),
     supabase
       .from("news_incidents")
-      .select("id, source, source_url, title, summary, crime_type, severity, neighborhood, address, lat, lng, published_at")
+      .select(
+        "id, source, source_url, title, summary, crime_type, severity, neighborhood, address, lat, lng, published_at",
+      )
       .gte("lat", SF_BBOX.minLat)
       .lte("lat", SF_BBOX.maxLat)
       .gte("lng", SF_BBOX.minLng)
       .lte("lng", SF_BBOX.maxLng)
       .order("published_at", { ascending: false })
       .limit(500),
+    listLiveIncidents({ unacknowledgedOnly: true }),
   ]);
 
   const newsIncidents: NewsIncidentRow[] = (newsRes.data ?? []).map((n) => ({
@@ -41,5 +48,12 @@ export default async function MapPage() {
     publishedAt: n.published_at as string,
   }));
 
-  return <SFMap cameras={cameras} newsIncidents={newsIncidents} />;
+  return (
+    <div className="flex" style={{ height: "calc(100vh - 3rem)" }}>
+      <div className="relative min-w-0 flex-1">
+        <SFMap cameras={cameras} newsIncidents={newsIncidents} />
+      </div>
+      <CockpitSidebar liveIncidents={liveIncidents} />
+    </div>
+  );
 }
