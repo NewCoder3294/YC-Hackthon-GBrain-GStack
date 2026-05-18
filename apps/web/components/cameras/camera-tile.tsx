@@ -11,7 +11,7 @@ export interface CameraTileData {
   direction: string | null;
   description: string;
   streamUrl: string;
-  streamType: "hls" | "mjpeg";
+  streamType: "hls" | "mjpeg" | "iframe";
   isActive: boolean;
 }
 
@@ -201,6 +201,21 @@ export function CameraTile({ camera, onStatusChange }: Props) {
             "h-full w-full bg-black object-cover transition-opacity",
             status === "live" ? "opacity-100" : "opacity-0",
           )}
+        />
+      )}
+
+      {inView && camera.streamType === "iframe" && (
+        // Embed cameras (e.g. Windy player.day pages). The loader is the
+        // tile-internal status reporter; iframes give us no readyState
+        // signal, so we treat any successful initial load as "live".
+        <iframe
+          src={camera.streamUrl}
+          title={camera.description}
+          onLoad={() => setStatus("live")}
+          allow="autoplay; encrypted-media"
+          referrerPolicy="no-referrer"
+          className="h-full w-full bg-black"
+          sandbox="allow-scripts allow-same-origin allow-popups"
         />
       )}
 

@@ -16,21 +16,31 @@ async function fetchActiveCameras(): Promise<CameraTileData[]> {
   });
   const { data, error } = await sb
     .from("cameras")
-    .select("id, caltrans_id, route, direction, description, stream_url, stream_type")
+    .select(
+      "id, caltrans_id, route, direction, description, stream_url, stream_type, source",
+    )
     .eq("is_active", true)
     .order("route", { ascending: true })
     .order("caltrans_id", { ascending: true });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((c) => ({
-    id: c.id as string,
-    caltransId: c.caltrans_id as string,
-    route: c.route as string,
-    direction: c.direction as string | null,
-    description: c.description as string,
-    streamUrl: c.stream_url as string,
-    streamType: c.stream_type as "hls" | "mjpeg",
-    isActive: true,
-  }));
+  return (data ?? []).map((c) => {
+    // Windy webcams are embeds (player.day URLs), not HLS — render via iframe.
+    const source = (c as { source?: string | null }).source ?? "caltrans";
+    const streamType: "hls" | "mjpeg" | "iframe" =
+      source === "windy"
+        ? "iframe"
+        : ((c.stream_type as "hls" | "mjpeg") ?? "hls");
+    return {
+      id: c.id as string,
+      caltransId: c.caltrans_id as string,
+      route: c.route as string,
+      direction: c.direction as string | null,
+      description: c.description as string,
+      streamUrl: c.stream_url as string,
+      streamType,
+      isActive: true,
+    };
+  });
 }
 
 export const loadCameras = unstable_cache(
