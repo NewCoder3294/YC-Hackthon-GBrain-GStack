@@ -100,6 +100,44 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
     );
   }
 
+  // Hold-decision fan-out: request access through the policy enforcer for
+  // every camera linked to this incident via a clip. Each call writes its
+  // own camera_access_events row (allowed or denied) — gives the citizen
+  // an audit trail even when the policy declines. Default basis for an
+  // implicit Hold request is standing_consent; the explicit per-camera UI
+  // in the incident sidebar covers exigent / warrant claims.
+  if (parsed.outcome === "hold") {
+    try {
+      const { data: clipRows } = await supabase
+        .from("clips")
+        .select("camera_id")
+        .eq("incident_id", parsed.incidentId);
+      const uniqueCameras = [
+        ...new Set(
+          (clipRows ?? []).map((r) => (r as { camera_id: string }).camera_id),
+        ),
+      ];
+      await Promise.all(
+        uniqueCameras.map((cameraId) =>
+          supabase.rpc("request_camera_access", {
+            p_camera_id: cameraId,
+            p_incident_id: parsed.incidentId,
+            p_accessed_by: `dispatcher:${parsed.reviewer}`,
+            p_legal_basis: "standing_consent",
+            p_reason: parsed.reason ?? "hold: pending corroboration",
+            p_has_warrant: false,
+            p_is_exigent: false,
+          }),
+        ),
+      );
+    } catch (e) {
+      console.error(
+        "[recordDecision] hold fan-out failed:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
   revalidatePath("/kg");
   revalidatePath("/incidents");
   revalidatePath(`/incidents/${parsed.incidentId}`);

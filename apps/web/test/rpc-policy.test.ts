@@ -12,8 +12,10 @@ try {
   const envPath = resolve(__dirname, "..", ".env.local");
   for (const line of readFileSync(envPath, "utf-8").split("\n")) {
     const m = line.match(/^([A-Z_]+)=(.*)$/);
-    if (m && !process.env[m[1]]) {
-      process.env[m[1]] = m[2].replace(/^"|"$/g, "");
+    if (m) {
+      const key = m[1]!;
+      const value = (m[2] ?? "").replace(/^"|"$/g, "");
+      if (!process.env[key]) process.env[key] = value;
     }
   }
 } catch {
@@ -125,7 +127,9 @@ describe.skipIf(!enabled)("request_camera_access RPC", () => {
   async function call(args: Record<string, unknown>): Promise<RpcResult> {
     const { data, error } = await supabase!.rpc("request_camera_access", args);
     if (error) throw new Error(error.message);
-    return (data as RpcResult[])[0];
+    const row = (data as RpcResult[] | null)?.[0];
+    if (!row) throw new Error("RPC returned no rows");
+    return row;
   }
 
   it("public camera → allowed, public_domain", async () => {
