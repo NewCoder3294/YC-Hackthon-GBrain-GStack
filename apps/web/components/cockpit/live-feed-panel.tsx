@@ -48,6 +48,14 @@ export function LiveFeedPanel({ rows }: { rows: LiveIncident[] }) {
               <span className="min-w-0 flex-1 truncate text-neutral-800">
                 {r.title}
               </span>
+              {(r.corroboratingSources ?? 0) >= 1 && (
+                <span
+                  className="shrink-0 border border-black bg-black px-1 py-0.5 font-mono text-[8px] uppercase tracking-widest text-white"
+                  title={`Cross-source verified by ${r.corroboratingSources} other source${(r.corroboratingSources ?? 0) === 1 ? "" : "s"}`}
+                >
+                  ✓ {r.corroboratingSources}
+                </span>
+              )}
               {r.neighborhood && (
                 <span className="shrink-0 text-[9px] text-neutral-500">
                   {r.neighborhood}

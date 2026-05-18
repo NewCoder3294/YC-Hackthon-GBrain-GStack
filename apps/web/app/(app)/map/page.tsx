@@ -9,6 +9,7 @@ import { listLiveIncidents } from "@/app/(app)/(incidents)/live/data";
 import { loadInstability } from "@/lib/cockpit/instability";
 import { loadSFBrief } from "@/lib/cockpit/sf-brief";
 import { loadTrafficDisruptions } from "@/lib/cockpit/traffic-disruptions";
+import { attachVerification } from "@/lib/cockpit/verification";
 import { decodeFilter, isFilterEmpty } from "@/lib/map/filter";
 import { loadFilteredIncidents } from "@/lib/map/load";
 
@@ -38,7 +39,7 @@ export default async function MapPage({ searchParams }: PageProps) {
   const [
     cameras,
     newsRes,
-    liveIncidents,
+    liveIncidentsRaw,
     instability,
     sfBrief,
     trafficDisruptions,
@@ -66,6 +67,11 @@ export default async function MapPage({ searchParams }: PageProps) {
       ? Promise.resolve([])
       : loadFilteredIncidents(filter),
   ]);
+
+  // Best-effort cross-source corroboration badges on the Live Feed.
+  // Non-blocking: attachVerification returns the unchanged rows if the
+  // view read fails.
+  const liveIncidents = await attachVerification(liveIncidentsRaw);
 
   const newsIncidents: NewsIncidentRow[] = (newsRes.data ?? []).map((n) => ({
     id: n.id as string,

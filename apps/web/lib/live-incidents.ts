@@ -44,6 +44,13 @@ export interface LiveIncident {
   address: string | null;
   occurredAt: string;
   acknowledgedAt: string | null;
+  /**
+   * Count of distinct OTHER sources that produced an incident within
+   * 200m / ±10min. >= 1 means cross-source verification. Computed by
+   * the `live_incidents_verification` SQL view; absent when the loader
+   * didn't enrich.
+   */
+  corroboratingSources?: number;
 }
 
 export const SOURCE_LABEL: Record<LiveIncidentSource, string> = {
