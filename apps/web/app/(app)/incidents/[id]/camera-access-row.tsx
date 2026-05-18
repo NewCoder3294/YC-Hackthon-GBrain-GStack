@@ -55,8 +55,6 @@ export function CameraAccessRow({
             reason: quickPublic
               ? "public-camera ad-hoc review"
               : reason.trim(),
-            hasWarrant: basis === "warrant",
-            isExigent: basis === "exigent",
           }),
         },
       );

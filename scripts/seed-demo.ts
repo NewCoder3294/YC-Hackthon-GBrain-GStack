@@ -43,8 +43,13 @@ if (!url || !key) {
 const supabase = createClient(url, key, { auth: { persistSession: false } });
 
 const DEMO_DISPATCHER_EMAIL = "dispatcher@watchdog.local";
-const DEMO_DISPATCHER_PASSWORD =
-  process.env.DEMO_DISPATCHER_PASSWORD ?? "WatchDog2026!";
+const DEMO_DISPATCHER_PASSWORD = process.env.DEMO_DISPATCHER_PASSWORD;
+if (!DEMO_DISPATCHER_PASSWORD) {
+  console.error(
+    "DEMO_DISPATCHER_PASSWORD is required (set it in apps/web/.env.local or shell env)",
+  );
+  process.exit(1);
+}
 const DEMO_TOKEN = "demo-mission-16th";
 const DEMO_LAT = 37.7651;
 const DEMO_LNG = -122.4194;

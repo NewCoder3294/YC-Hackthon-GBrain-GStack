@@ -114,17 +114,38 @@ export async function recordDecision(input: z.infer<typeof decideSchema>) {
         .eq("incident_id", parsed.incidentId);
       const uniqueCameras = [
         ...new Set(
-          (clipRows ?? []).map((r) => (r as { camera_id: string }).camera_id),
+          (clipRows ?? [])
+            .map((r) => (r as { camera_id: string | null }).camera_id)
+            .filter((id): id is string => !!id),
         ),
       ];
+
+      // Idempotency: if a Hold-flavoured audit row already exists for the
+      // (incident, camera) pair, don't re-emit it. Re-deciding Hold on the
+      // same incident is allowed (the dispatcher may revisit) but should
+      // not duplicate the citizen's audit log.
+      const accessedBy = `dispatcher:${parsed.reviewer}`;
+      const { data: existing } = await supabase
+        .from("camera_access_events")
+        .select("camera_id")
+        .eq("incident_id", parsed.incidentId)
+        .eq("accessed_by", accessedBy)
+        .like("reason", "hold:%");
+      const alreadyEmitted = new Set(
+        (existing ?? []).map(
+          (r) => (r as { camera_id: string }).camera_id,
+        ),
+      );
+      const toCall = uniqueCameras.filter((id) => !alreadyEmitted.has(id));
+
       await Promise.all(
-        uniqueCameras.map((cameraId) =>
+        toCall.map((cameraId) =>
           supabase.rpc("request_camera_access", {
             p_camera_id: cameraId,
             p_incident_id: parsed.incidentId,
-            p_accessed_by: `dispatcher:${parsed.reviewer}`,
+            p_accessed_by: accessedBy,
             p_legal_basis: "standing_consent",
-            p_reason: parsed.reason ?? "hold: pending corroboration",
+            p_reason: `hold: ${parsed.reason ?? "pending corroboration"}`,
             p_has_warrant: false,
             p_is_exigent: false,
           }),
