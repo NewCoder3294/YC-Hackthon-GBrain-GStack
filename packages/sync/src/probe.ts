@@ -22,7 +22,12 @@ export interface ProbeResult {
 const DEFAULTS = {
   concurrency: 20,
   timeoutMs: 6000,
-  abortThreshold: 0.5,
+  // Caltrans D4's CDN routinely 404s 60–80% of the URLs it advertises in
+  // cctvStatusD04.json (the syncCameras comment notes the same). At the
+  // old 0.5 threshold every probe run aborted, dead URLs accumulated, and
+  // /wall went empty. 0.95 still catches a near-total worker egress outage
+  // (where 100% fail) but lets the probe deactivate the actual rot.
+  abortThreshold: 0.95,
 } as const;
 
 async function probeOne(
