@@ -6,7 +6,9 @@ import type {
 } from "@/lib/cockpit/instability";
 import type { SFBrief } from "@/lib/cockpit/sf-brief";
 import type { TrafficDisruption } from "@/lib/cockpit/traffic-disruptions";
+import type { EnvSignalRow } from "@/lib/cockpit/environmental";
 import { LiveFeedPanel } from "./live-feed-panel";
+import { EnvironmentalPanel } from "./environmental-panel";
 import { NeighborhoodInstabilityPanel } from "./neighborhood-instability-panel";
 import { RiskOverviewPanel } from "./risk-overview-panel";
 import { SeverityMixPanel } from "./severity-mix-panel";
@@ -27,6 +29,7 @@ interface Props {
   aggregates: CockpitAggregates;
   sfBrief: SFBrief;
   trafficDisruptions: TrafficDisruption[];
+  envSignals?: EnvSignalRow[];
 }
 
 export function CockpitSidebar({
@@ -36,6 +39,7 @@ export function CockpitSidebar({
   aggregates,
   sfBrief,
   trafficDisruptions,
+  envSignals = [],
 }: Props) {
   // Server-rendered widget bodies passed as children into the client host.
   // The host owns ordering + visibility, the panels stay pure presentational.
@@ -93,6 +97,12 @@ export function CockpitSidebar({
       label: "Traffic Disruptions",
       defaultSpan: 2,
       node: <TrafficDisruptionsPanel rows={trafficDisruptions} />,
+    },
+    {
+      id: "environmental",
+      label: "Environmental",
+      defaultSpan: 2,
+      node: <EnvironmentalPanel rows={envSignals} />,
     },
   ];
 

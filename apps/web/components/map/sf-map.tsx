@@ -9,6 +9,7 @@ import { IncidentPanel } from "./incident-panel";
 import { DispatchPanel } from "./dispatch-panel";
 import { EventFeed } from "./event-feed";
 import { NewsPanel, type NewsIncidentRow } from "./news-panel";
+import type { EnvSignalRow } from "@/lib/cockpit/environmental";
 import { TopPriorityPanel } from "./top-priority-panel";
 import { useEventStream } from "@/hooks/use-event-stream";
 import { wdIncidents, type WdIncident, type WdSignal } from "@/lib/watchdog-fixtures";
@@ -21,7 +22,20 @@ type CamWithCoords = CameraTileData & { lat: number; lng: number };
 interface Props {
   cameras: CamWithCoords[];
   newsIncidents?: NewsIncidentRow[];
+  envSignals?: EnvSignalRow[];
 }
+
+// Single-glyph cue per env kind — colour and richer styling lives in CSS
+// keyed on data-kind. Kept terse so the marker stays at the same footprint
+// as the existing news/incident dots.
+const ENV_KIND_GLYPH: Record<string, string> = {
+  weather: "☁",
+  aqi: "•",
+  quake: "≈",
+  aircraft: "✈",
+  vessel: "⚓",
+  transit: "T",
+};
 
 const SF_CENTER: [number, number] = [-122.4194, 37.7749];
 
@@ -94,13 +108,18 @@ function buildPopupEl(title: string, sub: string): HTMLDivElement {
   return root;
 }
 
-export function SFMap({ cameras, newsIncidents = [] }: Props) {
+export function SFMap({
+  cameras,
+  newsIncidents = [],
+  envSignals = [],
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MlMap | null>(null);
   const incidentMarkersRef = useRef<maplibregl.Marker[]>([]);
   const signalMarkersRef = useRef<maplibregl.Marker[]>([]);
   const dispatchMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const newsMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const envMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
 
   const [stream, setStream] = useState<StreamFilter>("hls");
@@ -109,6 +128,7 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
   const [showSignals, setShowSignals] = useState(true);
   const [showDispatch, setShowDispatch] = useState(true);
   const [showNews, setShowNews] = useState(true);
+  const [showEnv, setShowEnv] = useState(true);
   const [dispatchPriority, setDispatchPriority] = useState<DispatchPriority>("all");
   const [selectedCam, setSelectedCam] = useState<CamWithCoords | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<WdIncident | null>(null);
@@ -450,6 +470,59 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
     }
   }, [showNews]);
 
+  // Env signals — weather alerts, AQI, quakes, aircraft, vessels, transit.
+  // Diff-and-sync against the row set keyed on EnvSignalRow.id. Markers
+  // carry data-kind + data-severity so CSS can style each kind. Rows
+  // without lat/lng are skipped (e.g. the synthetic `sf-avg` PurpleAir
+  // aggregate row).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded) return;
+    const store = envMarkersRef.current;
+    const placeable = envSignals.filter(
+      (r) => r.lat != null && r.lng != null,
+    );
+    const nextIds = new Set(placeable.map((r) => r.id));
+
+    for (const [id, marker] of store) {
+      if (!nextIds.has(id)) {
+        marker.remove();
+        store.delete(id);
+      }
+    }
+
+    for (const row of placeable) {
+      if (store.has(row.id)) continue;
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "wd-env-marker";
+      el.dataset.kind = row.kind;
+      el.dataset.severity = row.severity;
+      const labelBits = [row.kind.toUpperCase(), row.title];
+      if (row.subtitle) labelBits.push(row.subtitle);
+      el.setAttribute("aria-label", labelBits.join(" — "));
+      el.title = labelBits.join(" · ");
+      const inner = document.createElement("span");
+      inner.className = "wd-env-marker-glyph";
+      inner.textContent = ENV_KIND_GLYPH[row.kind] ?? "•";
+      el.appendChild(inner);
+      el.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        map.easeTo({ center: [row.lng!, row.lat!], zoom: 13.5 });
+      });
+      const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat([row.lng!, row.lat!])
+        .addTo(map);
+      store.set(row.id, marker);
+    }
+  }, [envSignals, mapLoaded]);
+
+  useEffect(() => {
+    for (const [, m] of envMarkersRef.current) {
+      m.getElement().style.display = showEnv ? "" : "none";
+    }
+  }, [showEnv]);
+
   return (
     <div className="relative w-full" style={{ height: "calc(100vh - 3rem)", minHeight: 480 }}>
       <div
@@ -476,6 +549,7 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
           onClick={() => setShowDispatch((v) => !v)}
         />
         <LayerToggle label="News" on={showNews} onClick={() => setShowNews((v) => !v)} />
+        <LayerToggle label="Env" on={showEnv} onClick={() => setShowEnv((v) => !v)} />
         <div className="flex">
           {(["all", "high", "routine"] as DispatchPriority[]).map((opt, i) => (
             <button
@@ -536,7 +610,7 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           {filteredCams.length} cams · {wdIncidents.length} incidents ·{" "}
           {filteredDispatch.length}/{dispatch.calls.length} dispatch ·{" "}
-          {newsIncidents.length} news
+          {newsIncidents.length} news · {envSignals.length} env
           {dispatch.loading ? " (loading)" : ""}
           {dispatch.error ? ` · ${dispatch.error}` : ""}
         </span>
@@ -815,6 +889,57 @@ export function SFMap({ cameras, newsIncidents = [] }: Props) {
         }
         .wd-news-marker:hover .wd-news-marker-inner {
           transform: rotate(45deg) scale(1.25);
+        }
+        /* Env markers — small mono pill glyphs, kind in dataset. */
+        .wd-env-marker {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+          margin: 0;
+          border: 1.25px solid #000;
+          background: #fff;
+          cursor: pointer;
+          line-height: 1;
+          width: 14px;
+          height: 14px;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 9px;
+          color: #000;
+          transition: transform 120ms ease, background 120ms ease;
+          will-change: transform;
+        }
+        .wd-env-marker-glyph {
+          display: block;
+          line-height: 1;
+        }
+        .wd-env-marker[data-severity="high"] {
+          background: #000;
+          color: #fff;
+        }
+        .wd-env-marker[data-severity="med"] {
+          background: #fff;
+          border-color: #000;
+        }
+        .wd-env-marker[data-severity="low"] {
+          background: #fff;
+          border-color: #a3a3a3;
+          color: #737373;
+        }
+        .wd-env-marker[data-kind="aircraft"] {
+          border-radius: 0;
+        }
+        .wd-env-marker[data-kind="vessel"] {
+          border-radius: 50%;
+        }
+        .wd-env-marker[data-kind="weather"],
+        .wd-env-marker[data-kind="aqi"],
+        .wd-env-marker[data-kind="quake"],
+        .wd-env-marker[data-kind="transit"] {
+          border-radius: 3px;
+        }
+        .wd-env-marker:hover {
+          transform: scale(1.2);
         }
       `}</style>
     </div>

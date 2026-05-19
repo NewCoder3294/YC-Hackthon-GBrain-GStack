@@ -1,12 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
 import { loadCameraPins } from "@/lib/cameras/load";
 import { SFMap } from "@/components/map/sf-map";
+import { MapAskBar } from "@/components/map/map-ask-bar";
+import { MapExportButtons } from "@/components/map/map-export-buttons";
+import { SavedViewsBar } from "@/components/map/saved-views-bar";
+import { listSavedViews } from "@/app/(app)/map/views-actions";
 import type { NewsIncidentRow } from "@/components/map/news-panel";
 import { CockpitSidebar } from "@/components/cockpit/cockpit-sidebar";
 import { listLiveIncidents } from "@/app/(app)/(incidents)/live/data";
 import { loadInstability } from "@/lib/cockpit/instability";
 import { loadSFBrief } from "@/lib/cockpit/sf-brief";
 import { loadTrafficDisruptions } from "@/lib/cockpit/traffic-disruptions";
+import { loadEnvSignals } from "@/lib/cockpit/environmental";
+import { attachVerification } from "@/lib/cockpit/verification";
+import { decodeFilter, isFilterEmpty } from "@/lib/map/filter";
+import { loadFilteredIncidents } from "@/lib/map/load";
 
 export const revalidate = 60;
 export const dynamic = "force-dynamic";
@@ -14,19 +22,33 @@ export const dynamic = "force-dynamic";
 // SF city bbox for the news layer.
 const SF_BBOX = { minLat: 37.7, maxLat: 37.84, minLng: -122.52, maxLng: -122.35 };
 
-export default async function MapPage() {
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function MapPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const filter = decodeFilter(params);
+  const filterIsEmpty = isFilterEmpty(filter);
   // Cameras come from the cached service-role loader so anon visitors get
   // the same Bay-Area-wide layer as logged-in operators. The news layer
   // is RLS-readable by anon already. Live incidents drive the Live Feed
   // panel in the cockpit sidebar.
+  //
+  // When the user has set a filter via the GBrain ask bar (?since=...&
+  // sources=...), we narrow the Live Feed query so the cockpit reflects
+  // the same window the operator asked about.
   const supabase = await createClient();
   const [
     cameras,
     newsRes,
-    liveIncidents,
+    liveIncidentsRaw,
     instability,
     sfBrief,
     trafficDisruptions,
+    envSignals,
+    filteredPins,
+    savedViews,
   ] = await Promise.all([
     loadCameraPins(),
     supabase
@@ -44,7 +66,19 @@ export default async function MapPage() {
     loadInstability(),
     loadSFBrief(),
     loadTrafficDisruptions(),
+    loadEnvSignals(),
+    // Skip the filtered-incident query when no filter is set; saves a
+    // roundtrip on every map page load.
+    filterIsEmpty
+      ? Promise.resolve([])
+      : loadFilteredIncidents(filter),
+    listSavedViews(),
   ]);
+
+  // Best-effort cross-source corroboration badges on the Live Feed.
+  // Non-blocking: attachVerification returns the unchanged rows if the
+  // view read fails.
+  const liveIncidents = await attachVerification(liveIncidentsRaw);
 
   const newsIncidents: NewsIncidentRow[] = (newsRes.data ?? []).map((n) => ({
     id: n.id as string,
@@ -64,7 +98,14 @@ export default async function MapPage() {
   return (
     <div className="flex" style={{ height: "calc(100vh - 3rem)" }}>
       <div className="relative min-w-0 flex-1">
-        <SFMap cameras={cameras} newsIncidents={newsIncidents} />
+        <SFMap
+          cameras={cameras}
+          newsIncidents={newsIncidents}
+          envSignals={envSignals}
+        />
+        <MapAskBar matchCount={filteredPins.length} />
+        <MapExportButtons />
+        <SavedViewsBar initialViews={savedViews} />
       </div>
       <CockpitSidebar
         liveIncidents={liveIncidents}
@@ -73,6 +114,7 @@ export default async function MapPage() {
         aggregates={instability.aggregates}
         sfBrief={sfBrief}
         trafficDisruptions={trafficDisruptions}
+        envSignals={envSignals}
       />
     </div>
   );

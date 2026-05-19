@@ -39,6 +39,18 @@
     {
       "path": "/api/cron/sync-news",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-env",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/archive-incidents",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/geocode-backfill",
+      "schedule": "30 5 * * *"
     }
   ]
 }
