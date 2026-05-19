@@ -7,7 +7,6 @@ import type { CameraTileData } from "@/components/cameras/camera-tile";
 import { CameraTile } from "@/components/cameras/camera-tile";
 import { IncidentPanel } from "./incident-panel";
 import { DispatchPanel } from "./dispatch-panel";
-import { EventFeed } from "./event-feed";
 import { NewsPanel, type NewsIncidentRow } from "./news-panel";
 import type { EnvSignalRow } from "@/lib/cockpit/environmental";
 import { TopPriorityPanel } from "./top-priority-panel";
@@ -136,7 +135,6 @@ export function SFMap({
   const [selectedNews, setSelectedNews] = useState<NewsIncidentRow | null>(null);
 
   const dispatch = useDispatchFeed();
-  const eventStream = useEventStream(dispatch.calls);
 
   const locateOnMap = useCallback((lat: number, lng: number) => {
     const map = mapRef.current;
@@ -696,17 +694,6 @@ export function SFMap({
           onClose={() => setSelectedNews(null)}
         />
       )}
-
-      <TopPriorityPanel onFocus={locateOnMap} />
-
-      <EventFeed
-        events={eventStream.events}
-        officers={eventStream.officers}
-        onCancel={eventStream.cancel}
-        onReassign={eventStream.reassign}
-        onDispatchNow={eventStream.dispatchNow}
-        onLocate={locateOnMap}
-      />
 
 
       <style jsx global>{`

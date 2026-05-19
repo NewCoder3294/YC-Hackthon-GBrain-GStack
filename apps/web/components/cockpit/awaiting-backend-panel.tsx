@@ -13,8 +13,8 @@ interface Props {
  */
 export function AwaitingBackendPanel({ title, promise, scheduledFor }: Props) {
   return (
-    <section className="flex flex-col border-b border-neutral-200">
-      <header className="flex items-center justify-between border-b border-neutral-200 px-3 py-2">
+    <section className="flex flex-col">
+      <header className="flex items-center justify-between border-b border-neutral-300 px-2.5 py-1.5">
         <h2 className="font-mono text-[10px] uppercase tracking-widest">
           {title}
         </h2>
