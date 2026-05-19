@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { LiveStream } from "@/components/cameras/live-stream";
+
+// Public Caltrans D4 HLS feed — proxied through /api/hls.
+// Falls back to an "offline" overlay if the stream is down.
+const LANDING_PREVIEW_STREAM =
+  "https://wzmedia.dot.ca.gov/D4/N101_at_6th.stream/playlist.m3u8";
 
 // IntersectionObserver: returns [ref, inView]. Latches to true so reveal
 // animations play exactly once when the section scrolls into view.
@@ -147,11 +153,13 @@ function OwnerAlertMock() {
           <span className="tabular-nums">CAM 14B · live</span>
         </div>
 
-        <div className="flex flex-1 items-center justify-center bg-neutral-900 text-neutral-400">
-          <span className="font-mono text-[10px] uppercase tracking-widest">
-            ⟶ HLS feed preview
-          </span>
-        </div>
+        <LiveStream
+          streamUrl={LANDING_PREVIEW_STREAM}
+          streamType="hls"
+          className="flex-1"
+          lazy={false}
+          showLiveDot
+        />
 
         <div
           className="shrink-0 overflow-hidden border-t"
