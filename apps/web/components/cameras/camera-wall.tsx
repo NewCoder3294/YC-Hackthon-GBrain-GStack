@@ -26,7 +26,12 @@ export function CameraWall({ cameras }: Props) {
   const [stream, setStream] = useState<StreamFilter>("hls");
   const [query, setQuery] = useState("");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [hideOffline, setHideOffline] = useState(true);
+  // Default OFF: offline tiles stay in their slot with the "offline" overlay
+  // instead of being filtered out of `visible`, which triggers CSS-grid
+  // reflow and visually shifts every surviving tile. Re-applies the fix
+  // from 9672f31, which was reverted in 0010078 without restoring any
+  // in-place behavior.
+  const [hideOffline, setHideOffline] = useState(false);
   const [offlineIds, setOfflineIds] = useState<Set<string>>(() => new Set());
 
   const reportStatus = useCallback((id: string, status: CameraStatus) => {
