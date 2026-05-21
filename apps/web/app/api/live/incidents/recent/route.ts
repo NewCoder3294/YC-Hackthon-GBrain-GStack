@@ -1,6 +1,11 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 import {
   type LiveIncident,
   type LiveIncidentGeoPrecision,
@@ -60,14 +65,9 @@ function shape(r: DbRow): LiveIncident {
 // Returns the most-recent live SF incidents for client polling. Reads
 // via the service client so RLS on `live_incidents` (which denies anon
 // reads) doesn't blank the operator feed.
-export async function GET() {
-  const auth = await createClient();
-  const {
-    data: { user },
-  } = await auth.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+export async function GET(request: NextRequest) {
+  const rate = await checkRateLimit(request, RATE_LIMITS.livePoll);
+  if (!rate.allowed) return rateLimitResponse(rate);
 
   try {
     const supabase = createServiceClient();
@@ -92,11 +92,14 @@ export async function GET() {
         Number.isFinite(r.lng) &&
         (r.lat !== 0 || r.lng !== 0),
     );
-    return NextResponse.json({
-      incidents: usable,
-      count: usable.length,
-      fetchedAt: new Date().toISOString(),
-    });
+    return withRateLimitHeaders(
+      NextResponse.json({
+        incidents: usable,
+        count: usable.length,
+        fetchedAt: new Date().toISOString(),
+      }),
+      rate,
+    );
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "fetch failed", incidents: [] },

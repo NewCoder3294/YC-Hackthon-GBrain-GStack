@@ -30,6 +30,13 @@ interface Props {
 
 const MJPEG_REFRESH_MS = 5_000;
 const HLS_LOAD_TIMEOUT_MS = 8_000;
+const HLS_FATAL_RETRY_LIMIT = 3;
+const HLS_FATAL_RETRY_DELAY_MS = 1_200;
+
+function withCacheBuster(url: string): string {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}t=${Date.now()}`;
+}
 
 export function LiveStream({
   streamUrl,
@@ -67,6 +74,7 @@ export function LiveStream({
     let hls: Hls | null = null;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
     setStatus("loading");
     timer = setTimeout(() => {
@@ -76,15 +84,38 @@ export function LiveStream({
     const markLive = () => {
       if (cancelled) return;
       if (timer) clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
+      fatalErrorCount = 0;
       setStatus("live");
+      if (video.paused) {
+        video.play().catch(() => {});
+      }
     };
     const markOffline = () => {
       if (cancelled) return;
       if (timer) clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
       setStatus("offline");
     };
 
     const proxied = `/api/hls?url=${encodeURIComponent(streamUrl)}`;
+    let fatalErrorCount = 0;
+    const retryFatal = (recover: () => void) => {
+      if (cancelled) return;
+      fatalErrorCount += 1;
+      if (fatalErrorCount > HLS_FATAL_RETRY_LIMIT) {
+        markOffline();
+        return;
+      }
+      setStatus("loading");
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => {
+        if (!cancelled) recover();
+      }, HLS_FATAL_RETRY_DELAY_MS * fatalErrorCount);
+    };
+
+    video.addEventListener("loadeddata", markLive);
+    video.addEventListener("playing", markLive);
 
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = proxied;
@@ -102,10 +133,18 @@ export function LiveStream({
           hls = new HlsLib({ lowLatencyMode: true, maxBufferLength: 4 });
           hls.loadSource(proxied);
           hls.attachMedia(video);
-          hls.on(HlsLib.Events.MANIFEST_PARSED, markLive);
           hls.on(HlsLib.Events.FRAG_LOADED, markLive);
           hls.on(HlsLib.Events.ERROR, (_e, data) => {
-            if (data.fatal) markOffline();
+            if (!data.fatal) return;
+            if (data.type === HlsLib.ErrorTypes.NETWORK_ERROR) {
+              retryFatal(() => hls?.startLoad());
+              return;
+            }
+            if (data.type === HlsLib.ErrorTypes.MEDIA_ERROR) {
+              retryFatal(() => hls?.recoverMediaError());
+              return;
+            }
+            markOffline();
           });
           video.play().catch(() => {});
         })
@@ -117,6 +156,9 @@ export function LiveStream({
     return () => {
       cancelled = true;
       if (timer) clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
+      video.removeEventListener("loadeddata", markLive);
+      video.removeEventListener("playing", markLive);
       hls?.destroy();
     };
   }, [inView, streamUrl, streamType]);
@@ -124,9 +166,9 @@ export function LiveStream({
   useEffect(() => {
     if (!inView || streamType !== "mjpeg") return;
     setStatus("loading");
-    setImgSrc(`${streamUrl}?t=${Date.now()}`);
+    setImgSrc(withCacheBuster(streamUrl));
     const interval = setInterval(() => {
-      setImgSrc(`${streamUrl}?t=${Date.now()}`);
+      setImgSrc(withCacheBuster(streamUrl));
     }, MJPEG_REFRESH_MS);
     return () => clearInterval(interval);
   }, [inView, streamUrl, streamType]);

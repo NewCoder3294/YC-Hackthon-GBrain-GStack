@@ -15,33 +15,105 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-export const cameras = pgTable("cameras", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  caltransId: text("caltrans_id").notNull().unique(),
-  district: integer("district").notNull(),
-  route: text("route").notNull(),
-  direction: text("direction"),
-  mileMarker: numeric("mile_marker"),
-  description: text("description").notNull(),
-  lat: doublePrecision("lat").notNull(),
-  lng: doublePrecision("lng").notNull(),
-  streamUrl: text("stream_url").notNull(),
-  streamType: text("stream_type", { enum: ["hls", "mjpeg"] }).notNull(),
-  isActive: boolean("is_active").notNull().default(true),
-  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
+export const cameras = pgTable(
+  "cameras",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    caltransId: text("caltrans_id").notNull().unique(),
+    district: integer("district").notNull(),
+    route: text("route").notNull(),
+    direction: text("direction"),
+    mileMarker: numeric("mile_marker"),
+    description: text("description").notNull(),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    streamUrl: text("stream_url").notNull(),
+    streamType: text("stream_type", { enum: ["hls", "mjpeg"] }).notNull(),
+    stillImageUrl: text("still_image_url"),
+    source: text("source").notNull().default("caltrans"),
+    providerMetadata: jsonb("provider_metadata")
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    validationStatus: text("validation_status", {
+      enum: ["unchecked", "ok", "degraded", "failed", "stale"],
+    })
+      .notNull()
+      .default("unchecked"),
+    productStatus: text("product_status", {
+      enum: ["unchecked", "displayable", "degraded", "hidden"],
+    })
+      .notNull()
+      .default("unchecked"),
+    lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
+    validationError: text("validation_error"),
+    isActive: boolean("is_active").notNull().default(true),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    contributorId: uuid("contributor_id").references(() => contributors.id, {
+      onDelete: "cascade",
+    }),
+    // Non-null when the camera lives on a contributor's LAN and is reached
+    // via the phone-as-bridge tunnel. Pure-server cameras (Caltrans, public
+    // HLS URLs, vendor-cloud OAuth feeds) leave this null. The HLS proxy
+    // route dispatches on the `bridge://` URL scheme rather than chasing
+    // this FK, so existing read paths stay untouched.
+    bridgeId: uuid("bridge_id").references(() => bridges.id, {
+      onDelete: "set null",
+    }),
+  },
+  (t) => ({
+    productStatusIdx: index("idx_cameras_product_status").on(t.productStatus),
+  }),
+);
+
+export const cameraSurfaces = pgTable(
+  "camera_surfaces",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    cameraId: uuid("camera_id")
+      .notNull()
+      .references(() => cameras.id, { onDelete: "cascade" }),
+    kind: text("kind", {
+      enum: ["still", "hls", "iframe", "rtsp"],
+    }).notNull(),
+    url: text("url").notNull(),
+    provider: text("provider").notNull(),
+    providerKey: text("provider_key").notNull(),
+    priority: integer("priority").notNull().default(100),
+    isActive: boolean("is_active").notNull().default(true),
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    cameraIdx: index("idx_camera_surfaces_camera").on(t.cameraId),
+    providerKeyUq: uniqueIndex("camera_surfaces_provider_key_unique").on(
+      t.provider,
+      t.providerKey,
+    ),
+    kindIdx: index("idx_camera_surfaces_kind_active").on(t.kind, t.isActive),
+  }),
+);
+
+export const cameraSurfaceHealth = pgTable("camera_surface_health", {
+  surfaceId: uuid("surface_id")
+    .primaryKey()
+    .references(() => cameraSurfaces.id, { onDelete: "cascade" }),
+  reachabilityStatus: text("reachability_status", {
+    enum: ["unchecked", "ok", "failed", "stale"],
+  })
     .notNull()
-    .defaultNow(),
-  contributorId: uuid("contributor_id").references(() => contributors.id, {
-    onDelete: "cascade",
-  }),
-  // Non-null when the camera lives on a contributor's LAN and is reached
-  // via the phone-as-bridge tunnel. Pure-server cameras (Caltrans, public
-  // HLS URLs, vendor-cloud OAuth feeds) leave this null. The HLS proxy
-  // route dispatches on the `bridge://` URL scheme rather than chasing
-  // this FK, so existing read paths stay untouched.
-  bridgeId: uuid("bridge_id").references(() => bridges.id, {
-    onDelete: "set null",
-  }),
+    .default("unchecked"),
+  visualStatus: text("visual_status", {
+    enum: ["unchecked", "ok", "failed", "not_applicable", "stale"],
+  })
+    .notNull()
+    .default("unchecked"),
+  lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+  error: text("error"),
+  sampleMetadata: jsonb("sample_metadata").notNull().default(sql`'{}'::jsonb`),
 });
 
 export const incidents = pgTable("incidents", {
@@ -246,6 +318,10 @@ export const newsIncidents = pgTable(
 
 export type Camera = typeof cameras.$inferSelect;
 export type NewCamera = typeof cameras.$inferInsert;
+export type CameraSurface = typeof cameraSurfaces.$inferSelect;
+export type NewCameraSurface = typeof cameraSurfaces.$inferInsert;
+export type CameraSurfaceHealth = typeof cameraSurfaceHealth.$inferSelect;
+export type NewCameraSurfaceHealth = typeof cameraSurfaceHealth.$inferInsert;
 export type Incident = typeof incidents.$inferSelect;
 export type Clip = typeof clips.$inferSelect;
 export type SignalEvent = typeof signalEvents.$inferSelect;

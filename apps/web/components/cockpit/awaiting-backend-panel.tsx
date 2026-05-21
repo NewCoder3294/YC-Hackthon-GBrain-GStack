@@ -14,15 +14,15 @@ interface Props {
 export function AwaitingBackendPanel({ title, promise, scheduledFor }: Props) {
   return (
     <section className="flex flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-300 px-2.5 py-1.5">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest">
+      <header className="flex items-center justify-between border-b border-neutral-300 py-3 pl-4 pr-20">
+        <h2 className="font-mono text-[11px] uppercase tracking-widest">
           {title}
         </h2>
-        <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
           awaiting backend
         </span>
       </header>
-      <div className="space-y-2 px-3 py-4 font-mono text-[10px] leading-relaxed text-neutral-500">
+      <div className="space-y-2 px-4 py-4 font-mono text-[11px] leading-relaxed text-neutral-500">
         <p>{promise}</p>
         <p className="text-[9px] uppercase tracking-widest text-neutral-400">
           {scheduledFor}

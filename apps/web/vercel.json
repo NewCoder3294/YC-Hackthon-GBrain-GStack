@@ -5,6 +5,10 @@
       "schedule": "0 9 * * *"
     },
     {
+      "path": "/api/cron/validate-cameras",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/sync-curated-cameras",
       "schedule": "0 3 * * *"
     },

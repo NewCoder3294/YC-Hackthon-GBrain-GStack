@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { adminClient } from "@/lib/supabase/admin";
-import { rateLimit } from "@/lib/contribute/ratelimit";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,11 +43,14 @@ function emptyToNull(v: string | undefined): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  const rate = await checkRateLimit(request, {
+    ...RATE_LIMITS.sensitiveWrite,
+    keyPrefix: "api:contributor-waitlist",
+  });
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const ip =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (!rateLimit(`waitlist:${ip}`, { limit: 5, windowMs: 60_000 })) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
-  }
 
   const json = await request.json().catch(() => null);
   const parsed = schema.safeParse(json);

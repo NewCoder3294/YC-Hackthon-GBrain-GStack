@@ -10,7 +10,7 @@
  * so the whole thing is unit-testable without live network or a real DB.
  */
 
-import { cameras, type Db } from "@caltrans/db";
+import { cameras, cameraSurfaces, type Db } from "@caltrans/db";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 
@@ -146,14 +146,17 @@ async function selectFromDb(
       description: cameras.description,
       lat: cameras.lat,
       lng: cameras.lng,
-      streamUrl: cameras.streamUrl,
+      streamUrl: cameraSurfaces.url,
     })
     .from(cameras)
+    .innerJoin(cameraSurfaces, eq(cameraSurfaces.cameraId, cameras.id))
     .where(
       and(
+        eq(cameras.source, "caltrans"),
         eq(cameras.district, SF_DISTRICT),
-        eq(cameras.streamType, "hls"),
         eq(cameras.isActive, true),
+        eq(cameraSurfaces.kind, "hls"),
+        eq(cameraSurfaces.isActive, true),
         gte(cameras.lat, SF_BBOX.minLat),
         lte(cameras.lat, SF_BBOX.maxLat),
         gte(cameras.lng, SF_BBOX.minLng),
@@ -161,13 +164,19 @@ async function selectFromDb(
       ),
     );
 
-  const candidates: PinnedCamera[] = rows.map((r) => ({
-    caltransId: r.caltransId,
-    description: r.description,
-    lat: r.lat,
-    lng: r.lng,
-    streamUrl: r.streamUrl,
-  }));
+  const candidates: PinnedCamera[] = rows.flatMap((r) => {
+    const streamUrl = r.streamUrl;
+    if (!streamUrl.toLowerCase().endsWith(".m3u8")) return [];
+    return [
+      {
+        caltransId: r.caltransId,
+        description: r.description,
+        lat: r.lat,
+        lng: r.lng,
+        streamUrl,
+      },
+    ];
+  });
 
   if (forcedIds && forcedIds.length > 0) {
     return orderByForcedIds(candidates, forcedIds).slice(0, limit);

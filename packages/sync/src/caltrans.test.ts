@@ -23,7 +23,10 @@ const fixture = {
           imageDescription: "I-880 N @ 23RD AVE",
           streamingVideoURL:
             "https://cwwp2.dot.ca.gov/data/d4/cctv/image/tvd04001/tvd04001.stream/playlist.m3u8",
-          static: { currentImageURL: "" },
+          static: {
+            currentImageURL:
+              "https://cwwp2.dot.ca.gov/data/d4/cctv/image/tvd04001/tvd04001.jpg",
+          },
         },
       },
     },
@@ -57,7 +60,7 @@ const fixture = {
 };
 
 describe("parseCalTransResponse", () => {
-  it("parses HLS stream cameras", () => {
+  it("uses Caltrans still images as the display stream and preserves HLS metadata", () => {
     const cameras = parseCalTransResponse(fixture);
     expect(cameras[0]).toMatchObject({
       caltransId: "TVD04--001",
@@ -65,7 +68,18 @@ describe("parseCalTransResponse", () => {
       route: "I-880",
       direction: "N",
       description: "I-880 N @ 23RD AVE",
-      streamType: "hls",
+      streamType: "mjpeg",
+      streamUrl:
+        "https://cwwp2.dot.ca.gov/data/d4/cctv/image/tvd04001/tvd04001.jpg",
+      stillImageUrl:
+        "https://cwwp2.dot.ca.gov/data/d4/cctv/image/tvd04001/tvd04001.jpg",
+      providerMetadata: {
+        hlsUrl:
+          "https://cwwp2.dot.ca.gov/data/d4/cctv/image/tvd04001/tvd04001.stream/playlist.m3u8",
+        hasHls: true,
+        stillImageUrl:
+          "https://cwwp2.dot.ca.gov/data/d4/cctv/image/tvd04001/tvd04001.jpg",
+      },
       isActive: true,
     });
     expect(cameras[0]!.lat).toBeCloseTo(37.789);

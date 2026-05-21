@@ -1,6 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { adminClient } from "@/lib/supabase/admin";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +20,12 @@ const schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
+  const rate = await checkRateLimit(request, {
+    ...RATE_LIMITS.sensitiveWrite,
+    keyPrefix: "api:contribute-policy",
+  });
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const token = request.nextUrl.searchParams.get("token");
   const cameraId = request.nextUrl.searchParams.get("cameraId");
   if (!token || !cameraId) {

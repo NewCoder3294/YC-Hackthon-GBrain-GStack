@@ -1,6 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { decodeFilter } from "@/lib/map/filter";
 import { loadFilteredIncidents, type FilteredIncidentPin } from "@/lib/map/load";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -68,6 +74,9 @@ function toGeoJSON(rows: FilteredIncidentPin[]): string {
  * permalink URL with ?format=csv (or ?format=geojson) appended.
  */
 export async function GET(request: NextRequest) {
+  const rate = await checkRateLimit(request, RATE_LIMITS.mapExport);
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const params = request.nextUrl.searchParams;
   const format = (params.get("format") ?? "csv").toLowerCase();
   if (format !== "csv" && format !== "geojson") {
@@ -84,17 +93,23 @@ export async function GET(request: NextRequest) {
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   if (format === "csv") {
-    return new NextResponse(toCsv(rows), {
-      headers: {
-        "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="watchdog-${stamp}.csv"`,
-      },
-    });
+    return withRateLimitHeaders(
+      new NextResponse(toCsv(rows), {
+        headers: {
+          "content-type": "text/csv; charset=utf-8",
+          "content-disposition": `attachment; filename="watchdog-${stamp}.csv"`,
+        },
+      }),
+      rate,
+    );
   }
-  return new NextResponse(toGeoJSON(rows), {
-    headers: {
-      "content-type": "application/geo+json",
-      "content-disposition": `attachment; filename="watchdog-${stamp}.geojson"`,
-    },
-  });
+  return withRateLimitHeaders(
+    new NextResponse(toGeoJSON(rows), {
+      headers: {
+        "content-type": "application/geo+json",
+        "content-disposition": `attachment; filename="watchdog-${stamp}.geojson"`,
+      },
+    }),
+    rate,
+  );
 }

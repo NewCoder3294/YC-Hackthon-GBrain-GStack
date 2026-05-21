@@ -1,5 +1,11 @@
 import { z } from "zod";
 import type { NewCamera } from "@caltrans/db";
+import {
+  caltransExternalId,
+  isTruthyInService,
+  normalizeDirection,
+  routePrefix,
+} from "./camera-normalize";
 
 // CalTrans D4 schema has shifted over time:
 //   pre-2026-05:   route was `routeName` (e.g., "880"), `routeSuffix` for direction ("N"),
@@ -39,42 +45,14 @@ const responseSchema = z.object({
   data: z.array(z.object({ cctv: cctvSchema })),
 });
 
-function routePrefix(raw: string): string {
-  if (/^[A-Z]+-?\d+/i.test(raw)) return raw.toUpperCase(); // already prefixed (e.g. "I-580")
-  const n = Number(raw);
-  if (!Number.isFinite(n)) return raw;
-  const interstates = new Set([
-    5, 80, 205, 238, 280, 380, 405, 505, 580, 680, 780, 880, 980,
-  ]);
-  if (interstates.has(n)) return `I-${n}`;
-  if (n === 101 || n === 50 || n === 395) return `US-${n}`;
-  return `SR-${n}`;
-}
-
-// Normalize direction to a single uppercase letter when possible.
-function normalizeDirection(raw: string): string | null {
-  if (!raw) return null;
-  const v = raw.trim().toUpperCase();
-  if (v.startsWith("N")) return "N";
-  if (v.startsWith("S")) return "S";
-  if (v.startsWith("E")) return "E";
-  if (v.startsWith("W")) return "W";
-  return v.slice(0, 1) || null;
-}
-
-function isTruthyInService(v: string | boolean): boolean {
-  if (typeof v === "boolean") return v;
-  return v.toLowerCase() === "true";
-}
-
 export function parseCalTransResponse(input: unknown): NewCamera[] {
   const parsed = responseSchema.parse(input);
   const cameras: NewCamera[] = [];
 
   for (const { cctv } of parsed.data) {
     const hls = cctv.imageData.streamingVideoURL.trim();
-    const mjpeg = cctv.imageData.static.currentImageURL.trim();
-    if (!hls && !mjpeg) continue;
+    const still = cctv.imageData.static.currentImageURL.trim();
+    if (!hls && !still) continue;
 
     const lat = Number(cctv.location.latitude);
     const lng = Number(cctv.location.longitude);
@@ -100,9 +78,7 @@ export function parseCalTransResponse(input: unknown): NewCamera[] {
     // we upsert onto existing rows rather than creating duplicates. Only
     // prefix when CalTrans returned a bare numeric index (the new shape) —
     // leave already-prefixed identifiers (legacy + test fixtures) alone.
-    const externalId = /^\d+$/.test(cctv.index)
-      ? `D4-${cctv.index}`
-      : cctv.index;
+    const externalId = caltransExternalId(cctv.index);
 
     cameras.push({
       caltransId: externalId,
@@ -117,8 +93,21 @@ export function parseCalTransResponse(input: unknown): NewCamera[] {
         route,
       lat,
       lng,
-      streamUrl: hls || mjpeg,
-      streamType: hls ? "hls" : "mjpeg",
+      // Caltrans D4 exposes two different products:
+      // - streamingVideoURL: sparse/flaky HLS, useful for ffmpeg workers
+      // - static.currentImageURL: broad/reliable CCTV image, best for the wall
+      //
+      // The wall must not depend on HLS availability. Use the still image as
+      // the display stream whenever Caltrans provides one, and preserve the
+      // HLS URL in metadata for downstream video consumers.
+      streamUrl: still || hls,
+      streamType: still ? "mjpeg" : "hls",
+      stillImageUrl: still || null,
+      providerMetadata: {
+        hlsUrl: hls || null,
+        hasHls: Boolean(hls),
+        stillImageUrl: still || null,
+      },
       isActive: isTruthyInService(cctv.inService),
     });
   }

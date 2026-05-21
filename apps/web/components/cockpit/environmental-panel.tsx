@@ -47,33 +47,33 @@ export function EnvironmentalPanel({ rows }: { rows: EnvSignalRow[] }) {
 
   return (
     <section className="flex flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-300 px-2.5 py-1.5">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest">
+      <header className="flex items-center justify-between border-b border-neutral-300 py-3 pl-4 pr-20">
+        <h2 className="font-mono text-[11px] uppercase tracking-widest">
           Environmental
         </h2>
-        <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-500">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           {rows.length} · 6 sources · active
         </span>
       </header>
-      <ul className="font-mono text-[11px]">
+      <ul className="font-mono text-[12px]">
         {ranked.length === 0 ? (
-          <li className="px-2.5 py-3 text-[10px] text-neutral-400">
+          <li className="px-4 py-4 text-[10px] text-neutral-400">
             no active environmental signals
           </li>
         ) : (
           ranked.map((r) => (
             <li
               key={r.id}
-              className="flex items-baseline gap-2 border-b border-neutral-100 px-2.5 py-1 last:border-b-0"
+              className="grid grid-cols-[3rem_3rem_4.5rem_minmax(0,1fr)] items-baseline gap-3 border-b border-neutral-100 px-4 py-2.5 last:border-b-0"
             >
-              <span className="shrink-0 text-[9px] uppercase tracking-widest text-neutral-400">
+              <span className="text-[10px] uppercase tracking-widest text-neutral-400">
                 {age(r.occurredAt)}
               </span>
-              <span className="shrink-0 px-1 py-0.5 text-[8px] uppercase tracking-widest border border-neutral-300 text-neutral-600">
+              <span className="w-fit border border-neutral-300 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-neutral-600">
                 {KIND_GLYPH[r.kind]}
               </span>
               <span
-                className={`shrink-0 px-1 py-0.5 text-[8px] uppercase tracking-widest ${severityBadge(r.severity)}`}
+                className={`w-fit px-1.5 py-0.5 text-[9px] uppercase tracking-widest ${severityBadge(r.severity)}`}
               >
                 {r.severity}
               </span>

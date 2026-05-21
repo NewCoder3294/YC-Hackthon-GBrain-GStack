@@ -1,10 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { adminClient } from "@/lib/supabase/admin";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const rate = await checkRateLimit(request, {
+    ...RATE_LIMITS.sensitiveWrite,
+    keyPrefix: "api:alerts-unsubscribe",
+  });
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const token = request.nextUrl.searchParams.get("t");
   if (!token) {
     return NextResponse.json({ error: "missing_token" }, { status: 400 });

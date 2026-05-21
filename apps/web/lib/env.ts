@@ -34,6 +34,8 @@ const schema = z.object({
   // BART BSA — falls back to the documented public sample key if unset.
   // Set this to your own key for production traffic. https://api.bart.gov/api/register.aspx
   BART_API_KEY: z.string().min(8).optional(),
+  // Windy webcams API key — optional curated public camera source.
+  WINDY_WEBCAMS_API_KEY: z.string().min(8).optional(),
 });
 
 const blank = (v: string | undefined) => (v && v.length > 0 ? v : undefined);
@@ -57,4 +59,5 @@ export const env = schema.parse({
   OPENSKY_CLIENT_SECRET: blank(process.env.OPENSKY_CLIENT_SECRET),
   AISSTREAM_API_KEY: blank(process.env.AISSTREAM_API_KEY),
   BART_API_KEY: blank(process.env.BART_API_KEY),
+  WINDY_WEBCAMS_API_KEY: blank(process.env.WINDY_WEBCAMS_API_KEY),
 });

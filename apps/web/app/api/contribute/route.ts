@@ -4,7 +4,11 @@ import { adminClient } from "@/lib/supabase/admin";
 import { generateContributorToken } from "@/lib/contribute/token";
 import { generateVerificationCode } from "@/lib/contribute/code";
 import { sendSms } from "@/lib/contribute/sms";
-import { rateLimit } from "@/lib/contribute/ratelimit";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,10 +47,11 @@ const schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (!rateLimit(ip, { limit: 10, windowMs: 60_000 })) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
-  }
+  const rate = await checkRateLimit(request, {
+    ...RATE_LIMITS.publicWrite,
+    keyPrefix: "api:contribute",
+  });
+  if (!rate.allowed) return rateLimitResponse(rate);
 
   const json = await request.json().catch(() => null);
   const parsed = schema.safeParse(json);

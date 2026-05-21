@@ -1,5 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getRedis } from "@/lib/cache/redis";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 
 // Inlined: the LAN-tunnel bridge feature ships in a separate branch and
 // owns lib/contribute/bridge-protocol.ts. Inline the tiny parser here so
@@ -7,15 +13,49 @@ import { getRedis } from "@/lib/cache/redis";
 // full bridge module lands, swap back to the shared parser.
 function parseBridgeStreamUrl(
   url: string,
-): { bridgeId: string; onvifPath: string } | null {
+): { bridgeId: string; pathSegments: string[]; search: string } | null {
   if (!url.startsWith("bridge://")) return null;
   const rest = url.slice("bridge://".length);
   const slash = rest.indexOf("/");
   if (slash <= 0) return null;
-  const bridgeId = rest.slice(0, slash);
-  const onvifPath = rest.slice(slash + 1);
-  if (!bridgeId || !onvifPath) return null;
-  return { bridgeId, onvifPath };
+  let bridgeId: string;
+  try {
+    bridgeId = decodeURIComponent(rest.slice(0, slash));
+  } catch {
+    return null;
+  }
+  if (!bridgeId || bridgeId.includes("/") || bridgeId.includes("\\")) return null;
+
+  const pathAndSuffix = rest.slice(slash + 1);
+  const hashIndex = pathAndSuffix.indexOf("#");
+  const pathAndSearch =
+    hashIndex >= 0 ? pathAndSuffix.slice(0, hashIndex) : pathAndSuffix;
+  const queryIndex = pathAndSearch.indexOf("?");
+  const rawPath =
+    queryIndex >= 0 ? pathAndSearch.slice(0, queryIndex) : pathAndSearch;
+  const search = queryIndex >= 0 ? pathAndSearch.slice(queryIndex) : "";
+
+  const pathSegments: string[] = [];
+  for (const rawSegment of rawPath.split("/").filter(Boolean)) {
+    let segment: string;
+    try {
+      segment = decodeURIComponent(rawSegment);
+    } catch {
+      return null;
+    }
+    if (
+      !segment ||
+      segment === "." ||
+      segment === ".." ||
+      segment.includes("/") ||
+      segment.includes("\\")
+    ) {
+      return null;
+    }
+    pathSegments.push(segment);
+  }
+  if (pathSegments.length === 0) return null;
+  return { bridgeId, pathSegments, search };
 }
 
 export const runtime = "nodejs";
@@ -64,13 +104,11 @@ function rewriteManifest(body: string, target: URL, origin: string): string {
 
 // Two-tier cache. L1 is per-instance memory (sub-ms hit, scoped to one Fluid
 // Compute instance). L2 is Upstash Redis, shared across all instances and
-// regions — without it every cold function or scale-out spawns a duplicate
-// Caltrans fetch. Manifests are tiny text so we cache them whole; segments
-// (.ts/.m4s) are immutable once published and big enough that round-tripping
-// through Redis as base64 is still cheaper than re-pulling from Caltrans.
-const MANIFEST_TTL_MS = 12_000;
-const MANIFEST_REDIS_TTL_S = 15; // slight slop past L1 so stale L1 still beats Caltrans
-const MANIFEST_SWR_S = 30;
+// regions. Keep live manifests extremely short-lived: Caltrans chunklists only
+// contain a few ~10s segments, and browser/CDN caching of manifests stalls
+// hls.js by replaying an old chunklist until the player runs out of media.
+const MANIFEST_TTL_MS = 1_000;
+const MANIFEST_REDIS_TTL_S = 2;
 const SEGMENT_REDIS_TTL_S = 300;
 const SEGMENT_MAX_BYTES = 2_000_000; // 2 MB — skip Redis for anything larger
 
@@ -208,7 +246,7 @@ async function fetchSegment(
 // a Vercel-function workload); BRIDGE_TUNNEL_URL points at it. When the
 // env is unset, return 503 with a clear body so the wall UI can render
 // "Camera offline" rather than crashing.
-async function dispatchBridge(target: URL): Promise<Response> {
+async function dispatchBridge(targetUrl: string): Promise<Response> {
   const tunnelBase = process.env.BRIDGE_TUNNEL_URL;
   if (!tunnelBase) {
     return NextResponse.json(
@@ -217,17 +255,18 @@ async function dispatchBridge(target: URL): Promise<Response> {
     );
   }
   // bridge://<bridge_id>/<onvif_path>  →  <tunnel>/relay/<bridge_id>/<onvif_path>
-  const parsed = parseBridgeStreamUrl(target.toString());
+  const parsed = parseBridgeStreamUrl(targetUrl);
   if (!parsed) {
     return NextResponse.json(
       { error: "invalid_bridge_url" },
       { status: 400 },
     );
   }
-  const relay = new URL(
-    `/relay/${encodeURIComponent(parsed.bridgeId)}/${parsed.onvifPath}`,
-    tunnelBase,
-  );
+  const relay = new URL("/", tunnelBase);
+  relay.pathname = ["relay", parsed.bridgeId, ...parsed.pathSegments]
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  relay.search = parsed.search;
 
   const upstream = await fetch(relay.toString(), {
     headers: {
@@ -251,6 +290,9 @@ async function dispatchBridge(target: URL): Promise<Response> {
 }
 
 export async function GET(request: NextRequest) {
+  const rate = await checkRateLimit(request, RATE_LIMITS.streamProxy);
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const url = request.nextUrl.searchParams.get("url");
   if (!url) {
     return NextResponse.json({ error: "missing url" }, { status: 400 });
@@ -266,7 +308,7 @@ export async function GET(request: NextRequest) {
   // Contributor cameras (phone-as-bridge path) come in as bridge:// URLs.
   // Hand off to the tunnel before the public-host allowlist runs.
   if (target.protocol === "bridge:") {
-    return dispatchBridge(target);
+    return withRateLimitHeaders(await dispatchBridge(url), rate);
   }
 
   if (!isAllowed(target)) {
@@ -291,12 +333,11 @@ export async function GET(request: NextRequest) {
     }
     const rewritten = rewriteManifest(body, target, origin);
     headers.set("content-type", "application/vnd.apple.mpegurl");
-    const ttlS = Math.floor(MANIFEST_TTL_MS / 1000);
-    headers.set(
-      "cache-control",
-      `public, max-age=${ttlS}, s-maxage=${ttlS}, stale-while-revalidate=${MANIFEST_SWR_S}`,
+    headers.set("cache-control", "no-store");
+    return withRateLimitHeaders(
+      new NextResponse(rewritten, { status: 200, headers }),
+      rate,
     );
-    return new NextResponse(rewritten, { status: 200, headers });
   }
 
   const isSegment = /\.(ts|m4s|mp4|aac|key)$/i.test(target.pathname);
@@ -318,10 +359,13 @@ export async function GET(request: NextRequest) {
     );
     // Buffer<ArrayBufferLike> doesn't structurally match BodyInit under TS5
     // strict typing even though the runtime handles it fine.
-    return new NextResponse(seg.bytes as unknown as BodyInit, {
-      status: 200,
-      headers,
-    });
+    return withRateLimitHeaders(
+      new NextResponse(seg.bytes as unknown as BodyInit, {
+        status: 200,
+        headers,
+      }),
+      rate,
+    );
   }
 
   // Anything else (rare) — pass through without caching.
@@ -338,7 +382,10 @@ export async function GET(request: NextRequest) {
   const contentType = upstream.headers.get("content-type") ?? "";
   if (contentType) headers.set("content-type", contentType);
   headers.set("cache-control", "no-store");
-  return new NextResponse(upstream.body, { status: 200, headers });
+  return withRateLimitHeaders(
+    new NextResponse(upstream.body, { status: 200, headers }),
+    rate,
+  );
 }
 
 export function OPTIONS() {

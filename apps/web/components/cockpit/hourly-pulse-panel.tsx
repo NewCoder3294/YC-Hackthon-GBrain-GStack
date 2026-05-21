@@ -10,16 +10,16 @@ export function HourlyPulsePanel({ buckets }: Props) {
   const peakOffset = peakIdx === -1 ? null : peakIdx - 23;
   return (
     <section className="flex flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-300 px-2.5 py-1.5">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest">
+      <header className="flex items-center justify-between border-b border-neutral-300 py-3 pl-4 pr-20">
+        <h2 className="font-mono text-[11px] uppercase tracking-widest">
           Hourly Pulse
         </h2>
-        <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
           {total} · 24h
         </span>
       </header>
-      <div className="px-3 py-3">
-        <div className="flex h-14 items-end gap-px">
+      <div className="px-4 py-4">
+        <div className="flex h-20 items-end gap-px">
           {buckets.map((n, i) => {
             const h = max === 0 ? 0 : Math.round((n / max) * 100);
             return (
@@ -32,7 +32,7 @@ export function HourlyPulsePanel({ buckets }: Props) {
             );
           })}
         </div>
-        <div className="mt-1.5 flex justify-between font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+        <div className="mt-2 flex justify-between font-mono text-[10px] uppercase tracking-widest text-neutral-400">
           <span>-23h</span>
           {peakOffset !== null && (
             <span>

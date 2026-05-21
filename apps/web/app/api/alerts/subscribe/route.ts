@@ -2,7 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { adminClient } from "@/lib/supabase/admin";
-import { rateLimit } from "@/lib/contribute/ratelimit";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,11 +20,11 @@ const schema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  if (!rateLimit(`alerts:${ip}`, { limit: 5, windowMs: 60_000 })) {
-    return NextResponse.json({ error: "rate_limited" }, { status: 429 });
-  }
+  const rate = await checkRateLimit(request, {
+    ...RATE_LIMITS.sensitiveWrite,
+    keyPrefix: "api:alerts-subscribe",
+  });
+  if (!rate.allowed) return rateLimitResponse(rate);
 
   const json = await request.json().catch(() => null);
   const parsed = schema.safeParse(json);

@@ -34,19 +34,19 @@ export function SFBriefPanel({ brief }: Props) {
   const isFallback = !!brief.reason;
   return (
     <section className="flex flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-300 px-2.5 py-1.5">
-        <h2 className="font-mono text-[10px] uppercase tracking-widest">
+      <header className="flex items-center justify-between border-b border-neutral-300 py-3 pl-4 pr-20">
+        <h2 className="font-mono text-[11px] uppercase tracking-widest">
           SF Brief
         </h2>
-        <span className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
           {statusLabel(brief.reason)}
         </span>
       </header>
-      <div className="space-y-2 px-3 py-3 font-mono text-[11px] leading-relaxed">
+      <div className="space-y-3 px-4 py-4 font-mono text-[12px] leading-relaxed">
         <p className={isFallback ? "text-neutral-500" : "text-neutral-800"}>
           {isFallback ? fallbackBody(brief) : brief.text}
         </p>
-        <p className="font-mono text-[9px] uppercase tracking-widest text-neutral-400">
+        <p className="font-mono text-[10px] uppercase tracking-widest text-neutral-400">
           {brief.rowsConsidered} incidents · claude haiku 4.5
         </p>
       </div>

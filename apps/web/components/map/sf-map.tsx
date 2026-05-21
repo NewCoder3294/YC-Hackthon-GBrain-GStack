@@ -121,7 +121,7 @@ export function SFMap({
   const envMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const [mapLoaded, setMapLoaded] = useState(false);
 
-  const [stream, setStream] = useState<StreamFilter>("hls");
+  const [stream, setStream] = useState<StreamFilter>("all");
   const [showCameras, setShowCameras] = useState(true);
   const [showIncidents, setShowIncidents] = useState(true);
   const [showSignals, setShowSignals] = useState(true);
@@ -529,7 +529,7 @@ export function SFMap({
         style={{ width: "100%", height: "100%" }}
       />
 
-      <div className="pointer-events-auto absolute left-4 top-4 z-10 flex items-center gap-3 border border-neutral-200 bg-white px-3 py-2">
+      <div className="pointer-events-auto absolute left-4 right-4 top-4 z-10 flex flex-wrap items-center gap-2 border border-neutral-200 bg-white px-3 py-2">
         <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           Bay Area · D4
         </span>
@@ -605,7 +605,7 @@ export function SFMap({
         >
           {dispatch.paused ? "Feed paused" : "Feed live"}
         </button>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-neutral-500">
+        <span className="min-w-0 font-mono text-[10px] uppercase tracking-widest text-neutral-500">
           {filteredCams.length} cams · {wdIncidents.length} incidents ·{" "}
           {filteredDispatch.length}/{dispatch.calls.length} dispatch ·{" "}
           {newsIncidents.length} news · {envSignals.length} env

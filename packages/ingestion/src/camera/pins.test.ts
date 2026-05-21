@@ -9,9 +9,13 @@ import {
 function fakeDbReturning(rows: readonly Record<string, unknown>[]) {
   return {
     select: () => ({
-      from: () => ({
-        where: () => Promise.resolve(rows),
-      }),
+      from: () => {
+        const chain = {
+          innerJoin: () => chain,
+          where: () => Promise.resolve(rows),
+        };
+        return chain;
+      },
     }),
   };
 }
@@ -139,6 +143,9 @@ describe("selectPinnedCameras", () => {
     );
     expect(cams).toHaveLength(1);
     expect(cams[0]!.caltransId).toBe("TVD04--SF1");
+    expect(cams[0]!.streamUrl).toBe(
+      "https://wzmedia.dot.ca.gov/D4/sf1.stream/playlist.m3u8",
+    );
     expect(fetchSpy).not.toHaveBeenCalled(); // never hit fallback
   });
 

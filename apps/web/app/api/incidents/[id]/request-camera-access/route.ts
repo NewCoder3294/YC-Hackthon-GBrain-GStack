@@ -2,6 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { adminClient } from "@/lib/supabase/admin";
 import { requireDispatcher } from "@/lib/auth/require-dispatcher";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,6 +23,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const rate = await checkRateLimit(req, {
+    ...RATE_LIMITS.dispatcherAction,
+    keyPrefix: "api:incident-camera-access",
+  });
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   const raw = await params;
   const parsedParams = paramsSchema.safeParse(raw);
   if (!parsedParams.success) {

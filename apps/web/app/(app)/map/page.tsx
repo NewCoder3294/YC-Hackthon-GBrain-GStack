@@ -96,8 +96,11 @@ export default async function MapPage({ searchParams }: PageProps) {
   }));
 
   return (
-    <div className="flex" style={{ height: "calc(100vh - 3rem)" }}>
-      <div className="relative min-w-0 flex-1">
+    <div
+      className="flex flex-col xl:h-[calc(100vh-3rem)] xl:flex-row"
+      style={{ minHeight: "calc(100vh - 3rem)" }}
+    >
+      <div className="relative min-h-[560px] min-w-0 flex-1 xl:h-[calc(100vh-3rem)]">
         <SFMap
           cameras={cameras}
           newsIncidents={newsIncidents}

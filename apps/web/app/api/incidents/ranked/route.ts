@@ -1,9 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   rankIncidentPages,
   type IncidentPageRow,
 } from "@/lib/incidents/ranked";
+import {
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitResponse,
+  withRateLimitHeaders,
+} from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,7 +18,13 @@ export const dynamic = "force-dynamic";
  * Ranked dispatch queue: the correlator's `type='incident'` GBrain
  * pages, mapped + sorted highest-priority first. Consumed by /triage.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const rate = await checkRateLimit(request, {
+    ...RATE_LIMITS.livePoll,
+    keyPrefix: "api:incidents-ranked",
+  });
+  if (!rate.allowed) return rateLimitResponse(rate);
+
   try {
     const supabase = await createClient();
     const { data, error } = await supabase
@@ -38,7 +50,10 @@ export async function GET() {
     const incidents = rankIncidentPages(
       (data ?? []) as unknown as IncidentPageRow[],
     );
-    return NextResponse.json({ success: true, data: incidents });
+    return withRateLimitHeaders(
+      NextResponse.json({ success: true, data: incidents }),
+      rate,
+    );
   } catch (err: unknown) {
     return NextResponse.json(
       {
